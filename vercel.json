@@ -4,5 +4,6 @@
       "path": "/api/cron/ingest",
       "schedule": "*/15 * * * *"
     }
-  ]
+  ],
+  "framework": "nextjs"
 }
