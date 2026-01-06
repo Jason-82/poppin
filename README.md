@@ -1,5 +1,7 @@
 # Poppin - Chicago Nightlife Busyness App
 
+> Real-time crowd levels for Chicago nightlife
+
 A "Waze for nightlife" web app that shows real-time busyness information for bars, clubs, and latin dance venues in Chicago. Combines provider data with crowdsourced reports.
 
 ## Features
