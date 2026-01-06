@@ -1,0 +1,78 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Venue {
+  id               String                 @id @default(cuid())
+  name             String
+  address          String
+  latitude         Float
+  longitude        Float
+  type             VenueType
+  googlePlaceId    String?                @unique
+  description      String?
+  phoneNumber      String?
+  website          String?
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+
+  busynessObservations BusynessObservation[]
+  crowdReports         CrowdReport[]
+
+  @@index([latitude, longitude])
+  @@index([type])
+}
+
+enum VenueType {
+  bar
+  club
+  latin_dance
+}
+
+model BusynessObservation {
+  id        String              @id @default(cuid())
+  venueId   String
+  venue     Venue               @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  source    BusynessSource
+  level     Int                 // 0-100
+  timestamp DateTime            @default(now())
+
+  @@index([venueId, timestamp])
+  @@index([timestamp])
+}
+
+enum BusynessSource {
+  provider
+  crowd
+}
+
+model CrowdReport {
+  id            String          @id @default(cuid())
+  venueId       String
+  venue         Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  level         CrowdLevel
+  tags          String[]        // Array of tags like "good_music", "long_wait", "great_crowd"
+  browserToken  String          // Fingerprint/session identifier
+  ipAddress     String
+  userAgent     String?
+  createdAt     DateTime        @default(now())
+
+  @@index([venueId, createdAt])
+  @@index([createdAt])
+  @@index([browserToken])
+}
+
+enum CrowdLevel {
+  dead
+  warm
+  busy
+  packed
+}
