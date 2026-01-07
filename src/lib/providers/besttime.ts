@@ -63,6 +63,7 @@ export class BestTimeProvider implements BusynessProvider {
 
   /**
    * Get current busyness level for a venue
+   * Uses the forecast data to estimate current busyness based on day/hour
    */
   async getBusynessNow(venue: Venue): Promise<BusynessReading | null> {
     if (!this.apiKey) {
@@ -71,38 +72,79 @@ export class BestTimeProvider implements BusynessProvider {
     }
 
     try {
-      // Get or find BestTime venue ID
-      const bestTimeVenueId = await this.getBestTimeVenueId(venue);
-
-      if (!bestTimeVenueId) {
-        console.warn(`Could not find BestTime venue ID for ${venue.name}`);
-        return null;
-      }
-
       // Rate limiting
       await this.rateLimit();
 
-      // Get live busyness data
-      const url = new URL(`${this.baseUrl}/forecasts/live`);
-      url.searchParams.append('api_key_private', this.apiKey);
-      url.searchParams.append('venue_id', bestTimeVenueId);
+      // BestTime API: All parameters in query string for POST /forecasts
+      const params = new URLSearchParams({
+        api_key_private: this.apiKey,
+        venue_name: venue.name,
+        venue_address: venue.address,
+      });
 
-      const response = await fetch(url.toString());
+      const url = `${this.baseUrl}/forecasts?${params.toString()}`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+      });
 
       if (!response.ok) {
-        console.error(`BestTime API error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`BestTime API error for ${venue.name}: ${response.status}`, errorText.substring(0, 200));
         return null;
       }
 
-      const data: BestTimeLiveResponse = await response.json();
+      const data = await response.json();
 
-      if (data.status !== 'OK' || !data.analysis?.venue_live_busyness_available) {
-        console.warn(`Live busyness not available for venue ${venue.name}`);
+      if (data.status !== 'OK') {
+        console.warn(`BestTime error for ${venue.name}: ${data.message || 'Unknown error'}`);
         return null;
       }
 
-      // BestTime returns busyness as a percentage (0-100)
-      const level = data.analysis.venue_live_busyness ?? 0;
+      // Extract forecast data for current day/hour
+      const now = new Date();
+      const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
+      const currentHour = now.getHours();
+
+      // BestTime returns analysis.day_raw for each day
+      const analysis = data.analysis;
+      if (!analysis) {
+        console.warn(`No analysis data for ${venue.name}`);
+        return null;
+      }
+
+      // Find current day's data (BestTime uses Monday=0 to Sunday=6, we need to convert)
+      // JavaScript: Sunday=0, Monday=1, ... Saturday=6
+      // BestTime: Monday=0, Tuesday=1, ... Sunday=6
+      const bestTimeDay = currentDay === 0 ? 6 : currentDay - 1;
+
+      const dayData = analysis[bestTimeDay];
+      if (!dayData || !dayData.day_raw) {
+        console.warn(`No data for day ${bestTimeDay} for ${venue.name}`);
+        return null;
+      }
+
+      // Find the busyness for current hour
+      const hourData = dayData.day_raw.find((h: { hour: number }) => h.hour === currentHour);
+
+      let level = 50; // default
+      if (hourData && hourData.intensity_nr !== undefined) {
+        level = hourData.intensity_nr;
+      } else {
+        // Try to interpolate from nearby hours
+        const nearestHour = dayData.day_raw.reduce((nearest: { hour: number; intensity_nr: number } | null, h: { hour: number; intensity_nr: number }) => {
+          if (!nearest) return h;
+          const currentDiff = Math.abs(h.hour - currentHour);
+          const nearestDiff = Math.abs(nearest.hour - currentHour);
+          return currentDiff < nearestDiff ? h : nearest;
+        }, null);
+
+        if (nearestHour) {
+          level = nearestHour.intensity_nr;
+        }
+      }
+
+      console.log(`BestTime: ${venue.name} - Day ${bestTimeDay}, Hour ${currentHour}, Level ${level}`);
 
       return {
         level: Math.round(level),
@@ -110,7 +152,7 @@ export class BestTimeProvider implements BusynessProvider {
         source: this.name,
       };
     } catch (error) {
-      console.error('Error fetching BestTime live data:', error);
+      console.error('Error fetching BestTime data:', error);
       return null;
     }
   }
