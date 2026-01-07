@@ -11,6 +11,8 @@ interface FilterBarProps {
   neighborhoods: string[];
   latinTonightOnly: boolean;
   onLatinTonightChange: (enabled: boolean) => void;
+  selectedBusyness: string;
+  onBusynessChange: (busyness: string) => void;
 }
 
 const VENUE_TYPES = [
@@ -18,6 +20,13 @@ const VENUE_TYPES = [
   { value: 'bar', label: 'Bars' },
   { value: 'club', label: 'Clubs' },
   { value: 'latin_dance', label: 'Latin Dance' },
+];
+
+const BUSYNESS_LEVELS = [
+  { value: 'all', label: 'Any Vibe', icon: '' },
+  { value: 'packed', label: 'Packed', icon: '🔥' },
+  { value: 'busy', label: 'Busy+', icon: '⚡' },
+  { value: 'open', label: 'Open Now', icon: '✓' },
 ];
 
 export default function FilterBar({
@@ -28,6 +37,8 @@ export default function FilterBar({
   neighborhoods,
   latinTonightOnly,
   onLatinTonightChange,
+  selectedBusyness,
+  onBusynessChange,
 }: FilterBarProps) {
   return (
     <div className="flex gap-4 flex-wrap items-center">
@@ -44,6 +55,19 @@ export default function FilterBar({
           </Button>
         ))}
       </div>
+
+      {/* Busyness filter dropdown */}
+      <select
+        value={selectedBusyness}
+        onChange={(e) => onBusynessChange(e.target.value)}
+        className="bg-zinc-800 text-white text-sm px-3 py-1.5 rounded-lg border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+      >
+        {BUSYNESS_LEVELS.map(level => (
+          <option key={level.value} value={level.value}>
+            {level.icon} {level.label}
+          </option>
+        ))}
+      </select>
 
       {/* Latin Tonight toggle */}
       <button

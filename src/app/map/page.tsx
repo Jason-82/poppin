@@ -23,6 +23,7 @@ export default function MapPage() {
   const [filteredVenues, setFilteredVenues] = useState<Venue[]>([]);
   const [selectedType, setSelectedType] = useState('all');
   const [selectedNeighborhood, setSelectedNeighborhood] = useState('all');
+  const [selectedBusyness, setSelectedBusyness] = useState('all');
   const [latinTonightOnly, setLatinTonightOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [isLoading, setIsLoading] = useState(true);
@@ -59,7 +60,7 @@ export default function MapPage() {
     fetchVenues();
   }, []);
 
-  // Filter venues by type, neighborhood, and Latin tonight
+  // Filter venues by type, neighborhood, busyness, and Latin tonight
   useEffect(() => {
     let filtered = venues;
 
@@ -71,12 +72,29 @@ export default function MapPage() {
       filtered = filtered.filter(v => v.neighborhood === selectedNeighborhood);
     }
 
+    // Busyness filter
+    if (selectedBusyness !== 'all') {
+      filtered = filtered.filter(v => {
+        const level = v.currentBusyness.level;
+        switch (selectedBusyness) {
+          case 'packed':
+            return level > 75; // Purple pulsing - truly poppin!
+          case 'busy':
+            return level > 50; // Busy or packed
+          case 'open':
+            return level >= 0; // Not closed (-1 means closed)
+          default:
+            return true;
+        }
+      });
+    }
+
     if (latinTonightOnly) {
       filtered = filtered.filter(v => v.hasLatinTonight);
     }
 
     setFilteredVenues(filtered);
-  }, [venues, selectedType, selectedNeighborhood, latinTonightOnly]);
+  }, [venues, selectedType, selectedNeighborhood, selectedBusyness, latinTonightOnly]);
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
@@ -93,6 +111,8 @@ export default function MapPage() {
             neighborhoods={neighborhoods}
             latinTonightOnly={latinTonightOnly}
             onLatinTonightChange={setLatinTonightOnly}
+            selectedBusyness={selectedBusyness}
+            onBusynessChange={setSelectedBusyness}
           />
 
           <div className="flex gap-2">
