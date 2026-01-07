@@ -106,33 +106,67 @@ export class BestTimeProvider implements BusynessProvider {
       const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
       const currentHour = now.getHours();
 
-      // BestTime returns analysis.day_raw for each day
+      // BestTime returns analysis with day data
       const analysis = data.analysis;
       if (!analysis) {
-        console.warn(`No analysis data for ${venue.name}`);
+        console.warn(`No analysis data for ${venue.name}. Response keys: ${Object.keys(data).join(', ')}`);
         return null;
       }
+
+      // Log the analysis structure to debug
+      console.log(`BestTime analysis keys for ${venue.name}: ${Object.keys(analysis).join(', ')}`);
 
       // Find current day's data (BestTime uses Monday=0 to Sunday=6, we need to convert)
       // JavaScript: Sunday=0, Monday=1, ... Saturday=6
       // BestTime: Monday=0, Tuesday=1, ... Sunday=6
       const bestTimeDay = currentDay === 0 ? 6 : currentDay - 1;
 
-      const dayData = analysis[bestTimeDay];
-      if (!dayData || !dayData.day_raw) {
-        console.warn(`No data for day ${bestTimeDay} for ${venue.name}`);
+      // BestTime might use different keys for days - try multiple formats
+      let dayData = analysis[bestTimeDay] || analysis[`day_int_${bestTimeDay}`];
+
+      // If no direct index, look for day_info array
+      if (!dayData && analysis.day_info && Array.isArray(analysis.day_info)) {
+        dayData = analysis.day_info.find((d: { day_int: number }) => d.day_int === bestTimeDay);
+      }
+
+      // Also try week_raw if available
+      if (!dayData && analysis.week_raw && Array.isArray(analysis.week_raw)) {
+        // week_raw is a flat array of 7*24 = 168 hourly values
+        const hourIndex = bestTimeDay * 24 + currentHour;
+        const intensity = analysis.week_raw[hourIndex];
+        if (intensity !== undefined) {
+          console.log(`BestTime: ${venue.name} - Day ${bestTimeDay}, Hour ${currentHour}, Level ${intensity} (from week_raw)`);
+          return {
+            level: Math.round(intensity),
+            timestamp: new Date(),
+            source: this.name,
+          };
+        }
+      }
+
+      if (!dayData) {
+        console.warn(`No data for day ${bestTimeDay} for ${venue.name}. Analysis structure: ${JSON.stringify(analysis).substring(0, 300)}`);
+        return null;
+      }
+
+      // day_raw contains hourly data
+      const dayRaw = dayData.day_raw || dayData;
+      if (!Array.isArray(dayRaw)) {
+        console.warn(`day_raw is not array for ${venue.name}: ${typeof dayRaw}`);
         return null;
       }
 
       // Find the busyness for current hour
-      const hourData = dayData.day_raw.find((h: { hour: number }) => h.hour === currentHour);
+      const hourData = dayRaw.find((h: { hour: number }) => h.hour === currentHour);
 
-      let level = 50; // default
+      let level: number | undefined;
       if (hourData && hourData.intensity_nr !== undefined) {
         level = hourData.intensity_nr;
+      } else if (hourData && hourData.intensity !== undefined) {
+        level = hourData.intensity;
       } else {
         // Try to interpolate from nearby hours
-        const nearestHour = dayData.day_raw.reduce((nearest: { hour: number; intensity_nr: number } | null, h: { hour: number; intensity_nr: number }) => {
+        const nearestHour = dayRaw.reduce((nearest: { hour: number; intensity_nr?: number; intensity?: number } | null, h: { hour: number; intensity_nr?: number; intensity?: number }) => {
           if (!nearest) return h;
           const currentDiff = Math.abs(h.hour - currentHour);
           const nearestDiff = Math.abs(nearest.hour - currentHour);
@@ -140,8 +174,14 @@ export class BestTimeProvider implements BusynessProvider {
         }, null);
 
         if (nearestHour) {
-          level = nearestHour.intensity_nr;
+          level = nearestHour.intensity_nr ?? nearestHour.intensity;
         }
+      }
+
+      // Validate level before returning
+      if (level === undefined || level === null || isNaN(level)) {
+        console.warn(`Invalid level for ${venue.name}: ${level}. Hour data: ${JSON.stringify(hourData)}`);
+        return null;
       }
 
       console.log(`BestTime: ${venue.name} - Day ${bestTimeDay}, Hour ${currentHour}, Level ${level}`);
