@@ -135,6 +135,7 @@ export class BestTimeProvider implements BusynessProvider {
 
   /**
    * Get live busyness data using venue ID
+   * API: POST /forecast/live (note: singular "forecast", not "forecasts")
    */
   private async getLiveData(venueName: string, venueId: string): Promise<BusynessReading | null> {
     try {
@@ -145,14 +146,16 @@ export class BestTimeProvider implements BusynessProvider {
         venue_id: venueId,
       });
 
-      const url = `${this.baseUrl}/forecasts/live?${params.toString()}`;
+      // IMPORTANT: It's POST /forecast/live (singular), not GET /forecasts/live
+      const url = `${this.baseUrl}/forecast/live?${params.toString()}`;
 
       const response = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
       });
 
       if (!response.ok) {
-        console.log(`Live data request failed for ${venueName}: ${response.status}`);
+        const errorText = await response.text();
+        console.log(`Live data request failed for ${venueName}: ${response.status} - ${errorText.substring(0, 100)}`);
         return null;
       }
 
@@ -190,6 +193,7 @@ export class BestTimeProvider implements BusynessProvider {
 
   /**
    * Extract busyness from forecast data for current day/hour
+   * Uses hour_analysis array which contains structured hourly data with intensity_nr
    */
   private extractForecastData(venueName: string, data: { analysis?: Record<string, unknown> }): BusynessReading | null {
     const now = new Date();
@@ -202,9 +206,6 @@ export class BestTimeProvider implements BusynessProvider {
       return null;
     }
 
-    // Log the analysis structure to debug
-    console.log(`BestTime analysis keys for ${venueName}: ${Object.keys(analysis).join(', ')}`);
-
     // Find current day's data (BestTime uses Monday=0 to Sunday=6, we need to convert)
     // JavaScript: Sunday=0, Monday=1, ... Saturday=6
     // BestTime: Monday=0, Tuesday=1, ... Sunday=6
@@ -212,96 +213,59 @@ export class BestTimeProvider implements BusynessProvider {
 
     // BestTime uses string keys "0" through "6" for days
     const dayKey = String(bestTimeDay);
-    let dayData = analysis[dayKey] as Record<string, unknown> | undefined;
-
-    // Log what we found for debugging
-    console.log(`BestTime day ${bestTimeDay} (key "${dayKey}") for ${venueName}: ${dayData ? Object.keys(dayData).join(', ') : 'NOT FOUND'}`);
+    const dayData = analysis[dayKey] as Record<string, unknown> | undefined;
 
     if (!dayData) {
-      // Try numeric key
-      dayData = analysis[bestTimeDay] as Record<string, unknown> | undefined;
-    }
-
-    // If still no day data, try day_info array
-    if (!dayData && analysis.day_info && Array.isArray(analysis.day_info)) {
-      dayData = (analysis.day_info as Array<{ day_int: number }>).find((d) => d.day_int === bestTimeDay) as Record<string, unknown> | undefined;
-    }
-
-    // Also try week_raw if available
-    if (!dayData && analysis.week_raw && Array.isArray(analysis.week_raw)) {
-      const hourIndex = bestTimeDay * 24 + currentHour;
-      const intensity = (analysis.week_raw as number[])[hourIndex];
-      if (intensity !== undefined) {
-        console.log(`BestTime FORECAST: ${venueName} - Day ${bestTimeDay}, Hour ${currentHour}, Level ${intensity} (from week_raw)`);
-        return {
-          level: Math.round(intensity),
-          timestamp: new Date(),
-          source: `${this.name} (Forecast)`,
-        };
-      }
-    }
-
-    if (!dayData) {
-      console.warn(`No data for day ${bestTimeDay} for ${venueName}. Analysis structure: ${JSON.stringify(analysis).substring(0, 300)}`);
+      console.warn(`No data for day ${bestTimeDay} for ${venueName}`);
       return null;
     }
 
-    // Log the structure of dayData to understand it
-    console.log(`BestTime dayData structure for ${venueName}: ${JSON.stringify(dayData).substring(0, 500)}`);
+    // Use hour_analysis array - this contains the structured hourly data
+    // Format: [{"hour":6,"intensity_txt":"Closed","intensity_nr":999}, {"hour":7,"intensity_nr":45}, ...]
+    const hourAnalysis = dayData.hour_analysis as Array<{
+      hour: number;
+      intensity_nr: number;
+      intensity_txt?: string;
+    }> | undefined;
 
-    // day_raw contains hourly data - try multiple possible keys
-    let dayRaw = dayData.day_raw as Array<Record<string, unknown>> | undefined;
-
-    // If no day_raw, check if dayData itself is an array or has different structure
-    if (!dayRaw) {
-      // Maybe the entire dayData is the hourly array
-      if (Array.isArray(dayData)) {
-        dayRaw = dayData;
-      } else {
-        // Log all keys to help debug
-        console.log(`No day_raw found, dayData keys: ${Object.keys(dayData).join(', ')}`);
-        return null;
-      }
-    }
-
-    if (!Array.isArray(dayRaw)) {
-      console.warn(`day_raw is not array for ${venueName}: ${typeof dayRaw}`);
+    if (!hourAnalysis || !Array.isArray(hourAnalysis)) {
+      console.warn(`No hour_analysis for ${venueName}. dayData keys: ${Object.keys(dayData).join(', ')}`);
       return null;
     }
 
-    // Log first few entries to understand structure
-    console.log(`BestTime dayRaw sample for ${venueName}: ${JSON.stringify(dayRaw.slice(0, 3))}`);
+    // Find the busyness for current hour
+    let hourData = hourAnalysis.find((h) => h.hour === currentHour);
 
-    // Find the busyness for current hour - try both 'hour' and other possible keys
-    const hourData = dayRaw.find((h) => h.hour === currentHour || h.hour_int === currentHour);
-
-    let level: number | undefined;
-
-    if (hourData) {
-      // Try various possible field names for intensity
-      level = (hourData.intensity_nr ?? hourData.intensity ?? hourData.intensity_txt ?? hourData.raw) as number | undefined;
-      console.log(`Found hourData for hour ${currentHour}: ${JSON.stringify(hourData)}, extracted level: ${level}`);
-    } else {
-      console.log(`No hourData found for hour ${currentHour}, trying nearest hour`);
-      // Try to interpolate from nearby hours
-      const nearestHour = dayRaw.reduce((nearest: Record<string, unknown> | null, h) => {
-        if (!nearest) return h;
-        const hHour = (h.hour ?? h.hour_int) as number;
-        const nearestHourNum = (nearest.hour ?? nearest.hour_int) as number;
-        const currentDiff = Math.abs(hHour - currentHour);
-        const nearestDiff = Math.abs(nearestHourNum - currentHour);
-        return currentDiff < nearestDiff ? h : nearest;
-      }, null);
-
-      if (nearestHour) {
-        level = (nearestHour.intensity_nr ?? nearestHour.intensity ?? nearestHour.intensity_txt ?? nearestHour.raw) as number | undefined;
-        console.log(`Using nearest hour: ${JSON.stringify(nearestHour)}, level: ${level}`);
+    // If no exact hour match, find nearest open hour
+    if (!hourData) {
+      // Find nearest hour that's not closed (intensity_nr !== 999)
+      const openHours = hourAnalysis.filter(h => h.intensity_nr !== 999 && h.intensity_nr >= 0 && h.intensity_nr <= 100);
+      if (openHours.length > 0) {
+        hourData = openHours.reduce((nearest, h) => {
+          const currentDiff = Math.abs(h.hour - currentHour);
+          const nearestDiff = Math.abs(nearest.hour - currentHour);
+          return currentDiff < nearestDiff ? h : nearest;
+        });
+        console.log(`No data for hour ${currentHour}, using nearest open hour ${hourData.hour}`);
       }
     }
 
-    // Validate level before returning
-    if (level === undefined || level === null || isNaN(level)) {
-      console.warn(`Invalid level for ${venueName}: ${level}. Hour data: ${JSON.stringify(hourData)}`);
+    if (!hourData) {
+      console.log(`No valid hour data for ${venueName} at hour ${currentHour}`);
+      return null;
+    }
+
+    const level = hourData.intensity_nr;
+
+    // intensity_nr = 999 means venue is closed at this hour
+    if (level === 999) {
+      console.log(`${venueName} is closed at hour ${currentHour}`);
+      return null;
+    }
+
+    // Validate level is within expected range (0-100)
+    if (level === undefined || level === null || isNaN(level) || level < 0 || level > 100) {
+      console.warn(`Invalid level for ${venueName}: ${level}`);
       return null;
     }
 
