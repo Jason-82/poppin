@@ -7,8 +7,13 @@ import { NextRequest, NextResponse } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow auth verification endpoint without authentication
-  if (pathname === '/api/auth/verify') {
+  // Allow certain endpoints without cookie authentication
+  // These routes have their own authentication via CRON_SECRET
+  if (
+    pathname === '/api/auth/verify' ||
+    pathname === '/api/admin/seed' ||
+    pathname.startsWith('/api/cron/')
+  ) {
     return NextResponse.next();
   }
 
