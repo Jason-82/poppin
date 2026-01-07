@@ -114,12 +114,12 @@ export class BestTimeProvider implements BusynessProvider {
 
       // Cache the venue ID for future live data calls
       if (data.venue_info?.venue_id) {
-        bestTimeVenueId = data.venue_info.venue_id;
-        venueCache.set(venue.id, bestTimeVenueId);
-        console.log(`Cached BestTime venue ID for ${venue.name}: ${bestTimeVenueId}`);
+        const newVenueId: string = data.venue_info.venue_id;
+        venueCache.set(venue.id, newVenueId);
+        console.log(`Cached BestTime venue ID for ${venue.name}: ${newVenueId}`);
 
         // Now try live data with the new venue ID
-        const liveReading = await this.getLiveData(venue.name, bestTimeVenueId);
+        const liveReading = await this.getLiveData(venue.name, newVenueId);
         if (liveReading) {
           return liveReading;
         }
