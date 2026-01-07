@@ -17,8 +17,12 @@ export default function VenueMarker({ venue }: VenueMarkerProps) {
   const level = venue.currentBusyness.level;
   const confidence = venue.currentBusyness.confidence;
 
-  // PRIVACY FIX: Show grey marker for low confidence data
-  if (confidence < 0.2) {
+  // Handle special cases first
+  if (level === -1) {
+    // Venue is currently closed - show dark gray
+    markerColor = '#3f3f46'; // zinc-700 (dark gray for closed)
+  } else if (confidence < 0.2) {
+    // PRIVACY FIX: Show grey marker for low confidence data
     markerColor = '#71717a'; // zinc-500 (grey) for limited data
   } else if (level <= 25) {
     markerColor = '#16a34a'; // green-600

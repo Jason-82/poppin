@@ -135,24 +135,21 @@ export class BestTimeProvider implements BusynessProvider {
 
   /**
    * Get live busyness data using venue ID
-   * API: POST /forecast/live with JSON body
+   * API: GET /forecast/live with query params
    */
   private async getLiveData(venueName: string, venueId: string): Promise<BusynessReading | null> {
     try {
       await this.rateLimit();
 
-      const url = `${this.baseUrl}/forecast/live`;
+      // Try GET with query params
+      const params = new URLSearchParams({
+        api_key_private: this.apiKey,
+        venue_id: venueId,
+      });
+      const url = `${this.baseUrl}/forecast/live?${params.toString()}`;
 
-      // Send params as JSON body for POST request
       const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          api_key_private: this.apiKey,
-          venue_id: venueId,
-        }),
+        method: 'GET',
       });
 
       if (!response.ok) {
@@ -236,34 +233,33 @@ export class BestTimeProvider implements BusynessProvider {
     }
 
     // Find the busyness for current hour
-    let hourData = hourAnalysis.find((h) => h.hour === currentHour);
+    const currentHourData = hourAnalysis.find((h) => h.hour === currentHour);
 
-    // If no exact hour match, find nearest open hour
-    if (!hourData) {
-      // Find nearest hour that's not closed (intensity_nr !== 999)
-      const openHours = hourAnalysis.filter(h => h.intensity_nr !== 999 && h.intensity_nr >= 0 && h.intensity_nr <= 100);
-      if (openHours.length > 0) {
-        hourData = openHours.reduce((nearest, h) => {
-          const currentDiff = Math.abs(h.hour - currentHour);
-          const nearestDiff = Math.abs(nearest.hour - currentHour);
-          return currentDiff < nearestDiff ? h : nearest;
-        });
-        console.log(`No data for hour ${currentHour}, using nearest open hour ${hourData.hour}`);
-      }
+    // Find nearest open hour for "expected when open" info
+    const openHours = hourAnalysis.filter(h => h.intensity_nr !== 999 && h.intensity_nr >= 0 && h.intensity_nr <= 100);
+    let nearestOpenHour: { hour: number; intensity_nr: number } | undefined;
+    if (openHours.length > 0) {
+      nearestOpenHour = openHours.reduce((nearest, h) => {
+        const currentDiff = Math.abs(h.hour - currentHour);
+        const nearestDiff = Math.abs(nearest.hour - currentHour);
+        return currentDiff < nearestDiff ? h : nearest;
+      });
     }
 
-    if (!hourData) {
-      console.log(`No valid hour data for ${venueName} at hour ${currentHour}`);
-      return null;
+    // Check if venue is currently closed (intensity_nr = 999)
+    if (!currentHourData || currentHourData.intensity_nr === 999) {
+      console.log(`${venueName} is CLOSED at hour ${currentHour}${nearestOpenHour ? `, expected ${nearestOpenHour.intensity_nr}% busy at hour ${nearestOpenHour.hour}` : ''}`);
+
+      // Return closed status (-1) with expected busyness when open
+      return {
+        level: -1, // -1 indicates closed
+        timestamp: new Date(),
+        source: `${this.name} (Closed)`,
+        expectedWhenOpen: nearestOpenHour?.intensity_nr,
+      };
     }
 
-    const level = hourData.intensity_nr;
-
-    // intensity_nr = 999 means venue is closed at this hour
-    if (level === 999) {
-      console.log(`${venueName} is closed at hour ${currentHour}`);
-      return null;
-    }
+    const level = currentHourData.intensity_nr;
 
     // Validate level is within expected range (0-100)
     if (level === undefined || level === null || isNaN(level) || level < 0 || level > 100) {

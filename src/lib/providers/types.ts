@@ -34,7 +34,11 @@ export interface BusynessProvider {
  * A single busyness reading from a provider
  */
 export interface BusynessReading {
-  /** Busyness level on a 0-100 scale (0 = empty, 100 = at capacity) */
+  /**
+   * Busyness level on a 0-100 scale (0 = empty, 100 = at capacity)
+   * Special values:
+   *   -1 = venue is currently closed
+   */
   level: number;
 
   /** When this reading was taken */
@@ -42,6 +46,9 @@ export interface BusynessReading {
 
   /** Source identifier (provider name) */
   source: string;
+
+  /** Optional: when venue is closed, expected busyness when it opens */
+  expectedWhenOpen?: number;
 }
 
 /**

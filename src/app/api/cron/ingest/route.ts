@@ -64,6 +64,7 @@ export async function GET(request: NextRequest) {
 
         if (reading) {
           // Create BusynessObservation record
+          // level = -1 means venue is closed
           await prisma.busynessObservation.create({
             data: {
               venueId: venue.id,
@@ -74,9 +75,16 @@ export async function GET(request: NextRequest) {
           });
 
           observationsCreated++;
-          console.log(
-            `[CRON] ✓ ${venue.name}: level=${reading.level}`
-          );
+
+          if (reading.level === -1) {
+            console.log(
+              `[CRON] ✓ ${venue.name}: CLOSED${reading.expectedWhenOpen ? ` (expected ${reading.expectedWhenOpen}% when open)` : ''}`
+            );
+          } else {
+            console.log(
+              `[CRON] ✓ ${venue.name}: level=${reading.level}`
+            );
+          }
         } else {
           console.log(`[CRON] ⚠ ${venue.name}: no data from provider`);
         }

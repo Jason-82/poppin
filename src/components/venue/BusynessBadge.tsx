@@ -12,9 +12,15 @@ export default function BusynessBadge({ level, confidence, size = 'md' }: Busyne
   let bgColor: string;
   let textColor: string;
 
-  // PRIVACY FIX: If confidence is very low (< 0.2), show uncertainty
-  // This prevents showing definitive "Quiet" or "Packed" with insufficient data
-  if (confidence !== undefined && confidence < 0.2) {
+  // Handle special cases first
+  if (level === -1) {
+    // Venue is currently closed
+    band = 'Closed';
+    bgColor = 'bg-zinc-700';
+    textColor = 'text-zinc-300';
+  } else if (confidence !== undefined && confidence < 0.2) {
+    // PRIVACY FIX: If confidence is very low (< 0.2), show uncertainty
+    // This prevents showing definitive "Quiet" or "Packed" with insufficient data
     band = 'Limited Data';
     bgColor = 'bg-zinc-600';
     textColor = 'text-white';
