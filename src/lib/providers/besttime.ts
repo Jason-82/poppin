@@ -135,22 +135,24 @@ export class BestTimeProvider implements BusynessProvider {
 
   /**
    * Get live busyness data using venue ID
-   * API: POST /forecast/live (note: singular "forecast", not "forecasts")
+   * API: POST /forecast/live with JSON body
    */
   private async getLiveData(venueName: string, venueId: string): Promise<BusynessReading | null> {
     try {
       await this.rateLimit();
 
-      const params = new URLSearchParams({
-        api_key_private: this.apiKey,
-        venue_id: venueId,
-      });
+      const url = `${this.baseUrl}/forecast/live`;
 
-      // IMPORTANT: It's POST /forecast/live (singular), not GET /forecasts/live
-      const url = `${this.baseUrl}/forecast/live?${params.toString()}`;
-
+      // Send params as JSON body for POST request
       const response = await fetch(url, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          api_key_private: this.apiKey,
+          venue_id: venueId,
+        }),
       });
 
       if (!response.ok) {
