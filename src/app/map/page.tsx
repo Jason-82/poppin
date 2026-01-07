@@ -23,6 +23,7 @@ export default function MapPage() {
   const [filteredVenues, setFilteredVenues] = useState<Venue[]>([]);
   const [selectedType, setSelectedType] = useState('all');
   const [selectedNeighborhood, setSelectedNeighborhood] = useState('all');
+  const [latinTonightOnly, setLatinTonightOnly] = useState(false);
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +46,7 @@ export default function MapPage() {
           neLng: -87.52,
           swLat: 41.64,
           swLng: -87.94,
-          limit: 100,
+          limit: 200,
         });
         setVenues(data.venues);
       } catch (err) {
@@ -58,7 +59,7 @@ export default function MapPage() {
     fetchVenues();
   }, []);
 
-  // Filter venues by type and neighborhood
+  // Filter venues by type, neighborhood, and Latin tonight
   useEffect(() => {
     let filtered = venues;
 
@@ -70,8 +71,12 @@ export default function MapPage() {
       filtered = filtered.filter(v => v.neighborhood === selectedNeighborhood);
     }
 
+    if (latinTonightOnly) {
+      filtered = filtered.filter(v => v.hasLatinTonight);
+    }
+
     setFilteredVenues(filtered);
-  }, [venues, selectedType, selectedNeighborhood]);
+  }, [venues, selectedType, selectedNeighborhood, latinTonightOnly]);
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
@@ -86,6 +91,8 @@ export default function MapPage() {
             selectedNeighborhood={selectedNeighborhood}
             onNeighborhoodChange={setSelectedNeighborhood}
             neighborhoods={neighborhoods}
+            latinTonightOnly={latinTonightOnly}
+            onLatinTonightChange={setLatinTonightOnly}
           />
 
           <div className="flex gap-2">

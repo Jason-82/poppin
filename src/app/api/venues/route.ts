@@ -3,10 +3,25 @@ import { prisma } from '@/lib/prisma';
 import { fuseBusynessDataBulk } from '@/lib/busyness';
 import { VenueType } from '@prisma/client';
 
+// Helper to get current day of week (adjusted for nightlife - after midnight counts as previous day)
+function getCurrentDayOfWeek(): number {
+  const now = new Date();
+  const hour = now.getHours();
+  let day = now.getDay(); // 0=Sunday, 1=Monday, etc.
+
+  // If it's between midnight and 5am, consider it still the previous night
+  if (hour < 5) {
+    day = day === 0 ? 6 : day - 1;
+  }
+
+  return day;
+}
+
 /**
  * GET /api/venues
  * Retrieves venues within a bounding box with optional filters
- * Query params: neLat, neLng, swLat, swLng, type (optional), limit (optional)
+ * Query params: neLat, neLng, swLat, swLng, type (optional), neighborhood (optional),
+ *               eventTonight (optional), limit (optional)
  */
 export async function GET(request: NextRequest) {
   try {
@@ -19,6 +34,7 @@ export async function GET(request: NextRequest) {
     const swLng = searchParams.get('swLng');
     const typeParam = searchParams.get('type');
     const neighborhoodParam = searchParams.get('neighborhood');
+    const eventTonightParam = searchParams.get('eventTonight');
     const limitParam = searchParams.get('limit');
 
     // If bounding box not provided, return all venues (useful for initial load)
@@ -72,6 +88,20 @@ export async function GET(request: NextRequest) {
       whereClause.neighborhood = neighborhoodParam;
     }
 
+    // Get current day for event filtering
+    const currentDay = getCurrentDayOfWeek();
+
+    // Filter by venues with events tonight if requested
+    if (eventTonightParam === 'true' || eventTonightParam === 'latin') {
+      whereClause.recurringEvents = {
+        some: {
+          dayOfWeek: currentDay,
+          isActive: true,
+          ...(eventTonightParam === 'latin' ? { eventType: 'latin_dance' } : {}),
+        },
+      };
+    }
+
     // Parse limit (default 100, max 100)
     const limit = limitParam
       ? Math.min(parseInt(limitParam, 10), 100)
@@ -84,10 +114,18 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch venues from database
+    // Fetch venues from database with recurring events
     const venues = await prisma.venue.findMany({
       where: whereClause,
       take: limit,
+      include: {
+        recurringEvents: {
+          where: {
+            dayOfWeek: currentDay,
+            isActive: true,
+          },
+        },
+      },
       orderBy: {
         name: 'asc',
       },
@@ -106,6 +144,11 @@ export async function GET(request: NextRequest) {
         lastUpdated: new Date(),
       };
 
+      // Check for events tonight
+      const eventsTonight = venue.recurringEvents || [];
+      const hasEventTonight = eventsTonight.length > 0;
+      const hasLatinTonight = eventsTonight.some((e) => e.eventType === 'latin_dance');
+
       return {
         id: venue.id,
         name: venue.name,
@@ -120,6 +163,15 @@ export async function GET(request: NextRequest) {
           trend: busyness.trend,
           lastUpdated: busyness.lastUpdated.toISOString(),
         },
+        // Event info
+        hasEventTonight,
+        hasLatinTonight,
+        eventTonight: hasEventTonight ? {
+          name: eventsTonight[0].name,
+          type: eventsTonight[0].eventType,
+          startTime: eventsTonight[0].startTime,
+          endTime: eventsTonight[0].endTime,
+        } : null,
       };
     });
 

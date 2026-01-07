@@ -11,11 +11,11 @@ interface VenueMarkerProps {
   venue: Venue;
 }
 
-// Emoji icons for different venue types - clear and colorful!
-const VENUE_ICONS: Record<string, string> = {
-  bar: '🍸',
-  club: '🪩',  // Disco ball - more visible and fun!
-  latin_dance: '💃',
+// Icons for different venue types - using HTML for club to make it white
+const VENUE_ICONS: Record<string, { icon: string; style?: string }> = {
+  bar: { icon: '🍸' },
+  club: { icon: '♫', style: 'color: white; font-weight: bold; font-size: 20px;' },  // White music notes
+  latin_dance: { icon: '💃' },
 };
 
 // Color scheme based on busyness - nightlife friendly!
@@ -68,28 +68,54 @@ export default function VenueMarker({ venue }: VenueMarkerProps) {
   const confidence = venue.currentBusyness.confidence;
   const { bg, border, animation } = getMarkerStyle(level, confidence);
 
-  // Get emoji icon for venue type
-  const icon = VENUE_ICONS[venue.type] || VENUE_ICONS.bar;
+  // Get icon config for venue type
+  const iconConfig = VENUE_ICONS[venue.type] || VENUE_ICONS.bar;
+  const iconStyle = iconConfig.style || '';
+
+  // Check if venue has Latin event tonight
+  const hasLatinTonight = venue.hasLatinTonight;
+
+  // Event badge indicator (shown as small badge on top-right)
+  const eventBadge = hasLatinTonight
+    ? `<div style="
+        position: absolute;
+        top: -4px;
+        right: -4px;
+        background: #ec4899;
+        border-radius: 50%;
+        width: 16px;
+        height: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        border: 2px solid white;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+      ">💃</div>`
+    : '';
 
   // Create custom marker icon with emoji and animations
   const customIcon = new DivIcon({
     className: 'custom-marker',
     html: `
       <style>${pulseStyles}</style>
-      <div style="
-        background-color: ${bg};
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        border: 3px solid ${border};
-        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-        animation: ${animation};
-      ">
-        <span style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));">${icon}</span>
+      <div style="position: relative;">
+        <div style="
+          background-color: ${bg};
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 3px solid ${border};
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          animation: ${animation};
+        ">
+          <span style="filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); ${iconStyle}">${iconConfig.icon}</span>
+        </div>
+        ${eventBadge}
       </div>
     `,
     iconSize: [36, 36],
@@ -109,6 +135,14 @@ export default function VenueMarker({ venue }: VenueMarkerProps) {
         <div className="text-black min-w-[200px]">
           <h3 className="font-bold text-base mb-1">{venue.name}</h3>
           <p className="text-xs text-purple-600 font-medium mb-2">{typeLabel}</p>
+          {/* Show event tonight badge */}
+          {venue.eventTonight && (
+            <div className="mb-2 bg-pink-100 text-pink-800 px-2 py-1 rounded text-xs font-medium">
+              🔥 Tonight: {venue.eventTonight.name}
+              <br />
+              <span className="text-pink-600">{venue.eventTonight.startTime} - {venue.eventTonight.endTime}</span>
+            </div>
+          )}
           <div className="mb-2">
             <BusynessBadge
               level={venue.currentBusyness.level}

@@ -9,6 +9,8 @@ interface FilterBarProps {
   selectedNeighborhood: string;
   onNeighborhoodChange: (neighborhood: string) => void;
   neighborhoods: string[];
+  latinTonightOnly: boolean;
+  onLatinTonightChange: (enabled: boolean) => void;
 }
 
 const VENUE_TYPES = [
@@ -24,6 +26,8 @@ export default function FilterBar({
   selectedNeighborhood,
   onNeighborhoodChange,
   neighborhoods,
+  latinTonightOnly,
+  onLatinTonightChange,
 }: FilterBarProps) {
   return (
     <div className="flex gap-4 flex-wrap items-center">
@@ -40,6 +44,18 @@ export default function FilterBar({
           </Button>
         ))}
       </div>
+
+      {/* Latin Tonight toggle */}
+      <button
+        onClick={() => onLatinTonightChange(!latinTonightOnly)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+          latinTonightOnly
+            ? 'bg-pink-600 text-white'
+            : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 border border-zinc-700'
+        }`}
+      >
+        💃 Latin Tonight
+      </button>
 
       {/* Neighborhood dropdown */}
       <select

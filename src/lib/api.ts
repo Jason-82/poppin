@@ -17,6 +17,15 @@ export interface Venue {
     trend: 'up' | 'down' | 'stable';
     lastUpdated: string;
   };
+  // Event info
+  hasEventTonight?: boolean;
+  hasLatinTonight?: boolean;
+  eventTonight?: {
+    name: string;
+    type: string;
+    startTime: string;
+    endTime: string;
+  } | null;
 }
 
 export interface VenueDetail extends Venue {
@@ -54,6 +63,7 @@ export async function getVenues(params?: {
   swLng?: number;
   type?: string;
   neighborhood?: string;
+  eventTonight?: string;  // 'true' for any event, 'latin' for Latin dance nights
   limit?: number;
 }): Promise<VenuesResponse> {
   const queryParams = new URLSearchParams();

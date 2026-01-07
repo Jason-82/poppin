@@ -28,6 +28,7 @@ model Venue {
   busynessObservations BusynessObservation[]
   crowdReports         CrowdReport[]
   videos               VenueVideo[]
+  recurringEvents      RecurringEvent[]
 
   @@index([latitude, longitude])
   @@index([type])
@@ -94,4 +95,35 @@ model VenueVideo {
 
   @@index([venueId, createdAt])
   @@index([expiresAt])
+}
+
+// Recurring events at venues (e.g., Latin dance nights at bars)
+model RecurringEvent {
+  id            String      @id @default(cuid())
+  venueId       String
+  venue         Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name          String      // e.g., "Baila Tuesdays", "Tropical Wednesdays"
+  eventType     EventType   // Type of event
+  dayOfWeek     Int         // 0=Sunday, 1=Monday, ..., 6=Saturday
+  startTime     String      // e.g., "20:00" (8 PM)
+  endTime       String      // e.g., "02:00" (2 AM)
+  description   String?     // Event details
+  isActive      Boolean     @default(true)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([venueId])
+  @@index([dayOfWeek])
+  @@index([eventType])
+  @@unique([venueId, dayOfWeek, eventType])  // One event type per day per venue
+}
+
+enum EventType {
+  latin_dance     // Salsa, Bachata, etc.
+  swing_dance     // West Coast Swing, Lindy Hop
+  live_music
+  dj_night
+  karaoke
+  trivia
+  other
 }
