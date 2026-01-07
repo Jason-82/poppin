@@ -1,11 +1,9 @@
 // Poppin PWA Service Worker
-const CACHE_NAME = 'poppin-v1';
+const CACHE_NAME = 'poppin-v2';
 const OFFLINE_URL = '/offline';
 
-// Assets to cache on install
+// Only cache truly static assets (not HTML pages)
 const STATIC_ASSETS = [
-  '/',
-  '/map',
   '/offline',
   '/manifest.json',
   '/icons/icon-192.png',
@@ -44,7 +42,7 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - network first for pages, cache first for static assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -59,10 +57,22 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Skip map tile requests (let them go directly to network)
+  if (url.hostname.includes('stadiamaps') || url.hostname.includes('tile')) {
+    return;
+  }
+
   event.respondWith(
     (async () => {
       try {
-        // Try cache first for static assets
+        // Always try network first for navigation and API calls
+        if (request.mode === 'navigate' || isApiCall(url)) {
+          console.log('[SW] Network first:', url.pathname);
+          const networkResponse = await fetch(request);
+          return networkResponse;
+        }
+
+        // For static assets, try cache first
         if (isStaticAsset(url)) {
           const cachedResponse = await caches.match(request);
           if (cachedResponse) {
@@ -71,19 +81,15 @@ self.addEventListener('fetch', (event) => {
           }
         }
 
-        // Try network first for API calls and dynamic content
+        // Fetch from network
         console.log('[SW] Fetching from network:', url.pathname);
         const networkResponse = await fetch(request);
 
-        // Cache successful responses
-        if (networkResponse.ok) {
+        // Cache successful static asset responses
+        if (networkResponse.ok && isStaticAsset(url)) {
           const cache = await caches.open(CACHE_NAME);
-
-          // Cache static assets and API responses
-          if (isStaticAsset(url) || isApiCall(url)) {
-            console.log('[SW] Caching response:', url.pathname);
-            cache.put(request, networkResponse.clone());
-          }
+          console.log('[SW] Caching response:', url.pathname);
+          cache.put(request, networkResponse.clone());
         }
 
         return networkResponse;
@@ -119,13 +125,11 @@ self.addEventListener('fetch', (event) => {
 
 // Helper function to check if URL is a static asset
 function isStaticAsset(url) {
-  const staticExtensions = ['.js', '.css', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.woff', '.woff2', '.ttf', '.ico'];
+  const staticExtensions = ['.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.woff', '.woff2', '.ttf', '.ico'];
   const pathname = url.pathname;
 
+  // Only cache actual static files, NOT HTML pages or JS/CSS bundles (they change on deploys)
   return staticExtensions.some(ext => pathname.endsWith(ext)) ||
-         pathname.startsWith('/_next/static/') ||
-         pathname === '/' ||
-         pathname === '/map' ||
          pathname === '/manifest.json';
 }
 
