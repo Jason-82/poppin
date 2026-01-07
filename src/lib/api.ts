@@ -4,6 +4,7 @@ export interface Venue {
   id: string;
   name: string;
   address: string;
+  neighborhood?: string;
   latitude: number;
   longitude: number;
   type: 'bar' | 'club' | 'latin_dance';
@@ -52,6 +53,7 @@ export async function getVenues(params?: {
   swLat?: number;
   swLng?: number;
   type?: string;
+  neighborhood?: string;
   limit?: number;
 }): Promise<VenuesResponse> {
   const queryParams = new URLSearchParams();

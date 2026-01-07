@@ -14,6 +14,7 @@ model Venue {
   id               String                 @id @default(cuid())
   name             String
   address          String
+  neighborhood     String?                // Chicago neighborhood (River North, Wicker Park, etc.)
   latitude         Float
   longitude        Float
   type             VenueType
@@ -30,6 +31,7 @@ model Venue {
 
   @@index([latitude, longitude])
   @@index([type])
+  @@index([neighborhood])
 }
 
 enum VenueType {

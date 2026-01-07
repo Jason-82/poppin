@@ -14,6 +14,7 @@ import { VenueType } from '@prisma/client';
 interface VenueData {
   name: string;
   address: string;
+  neighborhood: string;
   latitude: number;
   longitude: number;
   type: VenueType;
@@ -27,6 +28,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Three Dots and a Dash',
     address: '435 N Clark St, Chicago, IL 60654',
+    neighborhood: 'River North',
     latitude: 41.8901,
     longitude: -87.6308,
     type: 'bar',
@@ -36,6 +38,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'The Aviary',
     address: '955 W Fulton Market, Chicago, IL 60607',
+    neighborhood: 'West Loop',
     latitude: 41.8867,
     longitude: -87.6531,
     type: 'bar',
@@ -45,6 +48,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Sparrow',
     address: '3434 N Milwaukee Ave, Chicago, IL 60641',
+    neighborhood: 'Logan Square',
     latitude: 41.9435,
     longitude: -87.7177,
     type: 'bar',
@@ -53,6 +57,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'The Berkshire Room',
     address: '15 E Ohio St, Chicago, IL 60611',
+    neighborhood: 'River North',
     latitude: 41.8926,
     longitude: -87.6276,
     type: 'bar',
@@ -61,6 +66,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'The Drifter',
     address: '676 N Orleans St, Chicago, IL 60654',
+    neighborhood: 'River North',
     latitude: 41.8944,
     longitude: -87.6378,
     type: 'bar',
@@ -69,6 +75,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Sidetrack',
     address: '3349 N Halsted St, Chicago, IL 60657',
+    neighborhood: 'Boystown',
     latitude: 41.9434,
     longitude: -87.6491,
     type: 'bar',
@@ -78,6 +85,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Gibsons Bar & Steakhouse',
     address: '1028 N Rush St, Chicago, IL 60611',
+    neighborhood: 'Gold Coast',
     latitude: 41.9027,
     longitude: -87.6279,
     type: 'bar',
@@ -89,6 +97,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Sound-Bar',
     address: '226 W Ontario St, Chicago, IL 60654',
+    neighborhood: 'River North',
     latitude: 41.8931,
     longitude: -87.6355,
     type: 'club',
@@ -98,6 +107,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Spy Bar',
     address: '646 N Franklin St, Chicago, IL 60654',
+    neighborhood: 'River North',
     latitude: 41.8936,
     longitude: -87.6358,
     type: 'club',
@@ -107,6 +117,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Prysm Nightclub',
     address: '1543 N Kingsbury St, Chicago, IL 60642',
+    neighborhood: 'Old Town',
     latitude: 41.9102,
     longitude: -87.6425,
     type: 'club',
@@ -116,6 +127,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'HVAC',
     address: '169 W Kinzie St, Chicago, IL 60654',
+    neighborhood: 'River North',
     latitude: 41.8891,
     longitude: -87.6334,
     type: 'club',
@@ -124,6 +136,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Primary',
     address: '5634 N Milwaukee Ave, Chicago, IL 60646',
+    neighborhood: 'Jefferson Park',
     latitude: 41.9847,
     longitude: -87.7641,
     type: 'club',
@@ -133,6 +146,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Smartbar',
     address: '3730 N Clark St, Chicago, IL 60613',
+    neighborhood: 'Wrigleyville',
     latitude: 41.9499,
     longitude: -87.6512,
     type: 'club',
@@ -142,6 +156,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Stereo Nightclub',
     address: '2221 W North Ave, Chicago, IL 60647',
+    neighborhood: 'Wicker Park',
     latitude: 41.9105,
     longitude: -87.6851,
     type: 'club',
@@ -150,6 +165,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'TAO Chicago',
     address: '632 N Dearborn St, Chicago, IL 60654',
+    neighborhood: 'River North',
     latitude: 41.8933,
     longitude: -87.6296,
     type: 'club',
@@ -159,6 +175,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Moxy Chicago',
     address: '530 N LaSalle Dr, Chicago, IL 60654',
+    neighborhood: 'River North',
     latitude: 41.8915,
     longitude: -87.6327,
     type: 'club',
@@ -168,6 +185,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Bodega',
     address: '2056 W Division St, Chicago, IL 60622',
+    neighborhood: 'Wicker Park',
     latitude: 41.9031,
     longitude: -87.6790,
     type: 'club',
@@ -176,6 +194,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: '439',
     address: '439 N Clark St, Chicago, IL 60654',
+    neighborhood: 'River North',
     latitude: 41.8901,
     longitude: -87.6308,
     type: 'club',
@@ -184,6 +203,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Galeria',
     address: '1035 N Western Ave, Chicago, IL 60622',
+    neighborhood: 'Ukrainian Village',
     latitude: 41.8993,
     longitude: -87.6873,
     type: 'club',
@@ -194,6 +214,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Alhambra Palace',
     address: '1240 W Randolph St, Chicago, IL 60607',
+    neighborhood: 'West Loop',
     latitude: 41.8843,
     longitude: -87.6597,
     type: 'latin_dance',
@@ -202,6 +223,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Carnivale',
     address: '702 W Fulton Market, Chicago, IL 60661',
+    neighborhood: 'West Loop',
     latitude: 41.8867,
     longitude: -87.6475,
     type: 'latin_dance',
@@ -211,6 +233,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'La Catrina Cafe',
     address: '1011 W 18th St, Chicago, IL 60608',
+    neighborhood: 'Pilsen',
     latitude: 41.8578,
     longitude: -87.6536,
     type: 'latin_dance',
@@ -219,6 +242,7 @@ const chicagoVenues: VenueData[] = [
   {
     name: 'Downers Sand Club Sports Bar & Grill',
     address: '4850 Main St, Downers Grove, IL 60515',
+    neighborhood: 'Downers Grove',
     latitude: 41.7948,
     longitude: -88.0169,
     type: 'latin_dance',

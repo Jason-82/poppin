@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
     const swLat = searchParams.get('swLat');
     const swLng = searchParams.get('swLng');
     const typeParam = searchParams.get('type');
+    const neighborhoodParam = searchParams.get('neighborhood');
     const limitParam = searchParams.get('limit');
 
     // If bounding box not provided, return all venues (useful for initial load)
@@ -66,6 +67,11 @@ export async function GET(request: NextRequest) {
       whereClause.type = typeParam as VenueType;
     }
 
+    // Add neighborhood filter if provided
+    if (neighborhoodParam) {
+      whereClause.neighborhood = neighborhoodParam;
+    }
+
     // Parse limit (default 100, max 100)
     const limit = limitParam
       ? Math.min(parseInt(limitParam, 10), 100)
@@ -104,6 +110,7 @@ export async function GET(request: NextRequest) {
         id: venue.id,
         name: venue.name,
         address: venue.address,
+        neighborhood: venue.neighborhood,
         latitude: venue.latitude,
         longitude: venue.longitude,
         type: venue.type,

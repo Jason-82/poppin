@@ -22,9 +22,16 @@ export default function MapPage() {
   const [venues, setVenues] = useState<Venue[]>([]);
   const [filteredVenues, setFilteredVenues] = useState<Venue[]>([]);
   const [selectedType, setSelectedType] = useState('all');
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState('all');
   const [viewMode, setViewMode] = useState<'map' | 'list'>('map');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Extract unique neighborhoods from venues
+  const neighborhoods = React.useMemo(() => {
+    const uniqueNeighborhoods = [...new Set(venues.map(v => v.neighborhood).filter(Boolean))] as string[];
+    return uniqueNeighborhoods.sort();
+  }, [venues]);
 
   // Fetch venues on mount
   useEffect(() => {
@@ -51,14 +58,20 @@ export default function MapPage() {
     fetchVenues();
   }, []);
 
-  // Filter venues by type
+  // Filter venues by type and neighborhood
   useEffect(() => {
-    if (selectedType === 'all') {
-      setFilteredVenues(venues);
-    } else {
-      setFilteredVenues(venues.filter(v => v.type === selectedType));
+    let filtered = venues;
+
+    if (selectedType !== 'all') {
+      filtered = filtered.filter(v => v.type === selectedType);
     }
-  }, [venues, selectedType]);
+
+    if (selectedNeighborhood !== 'all') {
+      filtered = filtered.filter(v => v.neighborhood === selectedNeighborhood);
+    }
+
+    setFilteredVenues(filtered);
+  }, [venues, selectedType, selectedNeighborhood]);
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
@@ -67,7 +80,13 @@ export default function MapPage() {
       {/* Controls */}
       <div className="bg-zinc-900 border-b border-zinc-800 p-4">
         <div className="container mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <FilterBar selectedType={selectedType} onTypeChange={setSelectedType} />
+          <FilterBar
+            selectedType={selectedType}
+            onTypeChange={setSelectedType}
+            selectedNeighborhood={selectedNeighborhood}
+            onNeighborhoodChange={setSelectedNeighborhood}
+            neighborhoods={neighborhoods}
+          />
 
           <div className="flex gap-2">
             <Button
