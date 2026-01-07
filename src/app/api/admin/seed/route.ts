@@ -1,6 +1,15 @@
-import { PrismaClient, VenueType } from '@prisma/client';
+/**
+ * Admin Seed Endpoint
+ *
+ * Re-seeds the database with the latest venue data.
+ * Protected by CRON_SECRET for security.
+ *
+ * Usage: POST /api/admin/seed with Authorization: Bearer <CRON_SECRET>
+ */
 
-const prisma = new PrismaClient();
+import { NextRequest, NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { VenueType } from '@prisma/client';
 
 interface VenueData {
   name: string;
@@ -65,6 +74,15 @@ const chicagoVenues: VenueData[] = [
     type: 'bar',
     description: 'Iconic Boystown bar with multiple rooms and video screens',
     website: 'https://sidetrackchicago.com',
+  },
+  {
+    name: 'Gibsons Bar & Steakhouse',
+    address: '1028 N Rush St, Chicago, IL 60611',
+    latitude: 41.9027,
+    longitude: -87.6279,
+    type: 'bar',
+    description: 'Iconic Chicago steakhouse with lively bar scene',
+    website: 'https://gibsonssteakhouse.com',
   },
 
   // Clubs
@@ -206,44 +224,51 @@ const chicagoVenues: VenueData[] = [
     type: 'latin_dance',
     description: 'Sports bar with West Coast Swing dancing nights',
   },
-  {
-    name: 'Gibsons Bar & Steakhouse',
-    address: '1028 N Rush St, Chicago, IL 60611',
-    latitude: 41.9027,
-    longitude: -87.6279,
-    type: 'bar',
-    description: 'Iconic Chicago steakhouse with lively bar scene',
-    website: 'https://gibsonssteakhouse.com',
-  },
 ];
 
-async function main() {
-  console.log('Starting seed...');
+export async function POST(request: NextRequest) {
+  // Verify authorization
+  const authHeader = request.headers.get('authorization');
+  const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
 
-  // Clear existing data (optional - comment out if you want to keep existing data)
-  console.log('Clearing existing venues...');
-  await prisma.crowdReport.deleteMany({});
-  await prisma.busynessObservation.deleteMany({});
-  await prisma.venue.deleteMany({});
-
-  console.log('Creating venues...');
-
-  for (const venueData of chicagoVenues) {
-    const venue = await prisma.venue.create({
-      data: venueData,
-    });
-    console.log(`Created venue: ${venue.name}`);
+  if (!authHeader || authHeader !== expectedAuth) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  console.log('Seed completed successfully!');
-  console.log(`Total venues created: ${chicagoVenues.length}`);
-}
+  try {
+    console.log('[ADMIN] Starting database reseed...');
 
-main()
-  .catch((e) => {
-    console.error('Error during seed:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+    // Clear existing data
+    console.log('[ADMIN] Clearing existing data...');
+    await prisma.crowdReport.deleteMany({});
+    await prisma.busynessObservation.deleteMany({});
+    await prisma.venueVideo.deleteMany({});
+    await prisma.venue.deleteMany({});
+
+    // Create new venues
+    console.log('[ADMIN] Creating venues...');
+    const createdVenues = [];
+
+    for (const venueData of chicagoVenues) {
+      const venue = await prisma.venue.create({
+        data: venueData,
+      });
+      createdVenues.push(venue.name);
+      console.log(`[ADMIN] Created: ${venue.name}`);
+    }
+
+    console.log(`[ADMIN] Reseed completed! Created ${createdVenues.length} venues`);
+
+    return NextResponse.json({
+      success: true,
+      venuesCreated: createdVenues.length,
+      venues: createdVenues,
+    });
+  } catch (error) {
+    console.error('[ADMIN] Error during reseed:', error);
+    return NextResponse.json(
+      { error: 'Failed to reseed database' },
+      { status: 500 }
+    );
+  }
+}
