@@ -234,27 +234,26 @@ export class BestTimeProvider implements BusynessProvider {
       // Rate limiting
       await this.rateLimit();
 
-      // Use the new forecast endpoint with venue name and location
-      // Try form-urlencoded format which BestTime might expect
-      const url = `${this.baseUrl}/forecasts`;
+      // BestTime API: PUT api_key_private in query string, venue data in JSON body
+      const url = `${this.baseUrl}/forecasts?api_key_private=${encodeURIComponent(this.apiKey)}`;
 
-      const params = new URLSearchParams();
-      params.append('api_key_private', this.apiKey);
-      params.append('venue_name', venue.name);
-      params.append('venue_address', venue.address);
+      const body = {
+        venue_name: venue.name,
+        venue_address: venue.address,
+      };
 
       console.log(`BestTime POST forecast for: ${venue.name} at ${venue.address}`);
 
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
+          'Content-Type': 'application/json',
         },
-        body: params.toString(),
+        body: JSON.stringify(body),
       });
 
       const responseText = await response.text();
-      console.log(`BestTime response status: ${response.status}, body preview: ${responseText.substring(0, 200)}`);
+      console.log(`BestTime response status: ${response.status}, body preview: ${responseText.substring(0, 300)}`);
 
       if (!response.ok) {
         console.log(`POST forecast failed (${response.status}), response: ${responseText.substring(0, 500)}`);
