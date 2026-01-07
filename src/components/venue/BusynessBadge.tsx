@@ -20,25 +20,24 @@ export default function BusynessBadge({ level, confidence, size = 'md' }: Busyne
     textColor = 'text-zinc-300';
   } else if (confidence !== undefined && confidence < 0.2) {
     // PRIVACY FIX: If confidence is very low (< 0.2), show uncertainty
-    // This prevents showing definitive "Quiet" or "Packed" with insufficient data
-    band = 'Limited Data';
+    band = 'No Data';
     bgColor = 'bg-zinc-600';
     textColor = 'text-white';
   } else if (level <= 25) {
     band = 'Quiet';
-    bgColor = 'bg-green-600';
+    bgColor = 'bg-blue-500';
     textColor = 'text-white';
   } else if (level <= 50) {
-    band = 'Warm';
-    bgColor = 'bg-yellow-500';
-    textColor = 'text-black';
+    band = 'Warming Up';
+    bgColor = 'bg-green-500';
+    textColor = 'text-white';
   } else if (level <= 75) {
     band = 'Busy';
-    bgColor = 'bg-orange-500';
-    textColor = 'text-white';
+    bgColor = 'bg-yellow-500';
+    textColor = 'text-black';
   } else {
-    band = 'Packed';
-    bgColor = 'bg-red-600';
+    band = 'Packed!';
+    bgColor = 'bg-purple-500';
     textColor = 'text-white';
   }
 
