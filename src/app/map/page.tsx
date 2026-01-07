@@ -41,11 +41,11 @@ export default function MapPage() {
         setIsLoading(true);
         setError(null);
         const data = await getVenues({
-          // Chicago bounding box (approximate)
-          neLat: 42.02,
+          // Chicago metro area bounding box (includes suburbs)
+          neLat: 42.15,
           neLng: -87.52,
-          swLat: 41.64,
-          swLng: -87.94,
+          swLat: 41.60,
+          swLng: -88.30,
           limit: 500,
         });
         setVenues(data.venues);
