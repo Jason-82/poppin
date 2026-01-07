@@ -48,7 +48,7 @@ export default function MapView({ venues, center = [41.8781, -87.6298], zoom = 1
     >
       <TileLayer
         attribution='&copy; <a href="https://stadiamaps.com/" target="_blank">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/" target="_blank">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>'
-        url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
+        url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=7e540eba-fb2c-4557-885c-651983b7fa59"
       />
       <MapRecenter center={center} />
       {venues.map(venue => (
