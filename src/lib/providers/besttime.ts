@@ -210,17 +210,25 @@ export class BestTimeProvider implements BusynessProvider {
     // BestTime: Monday=0, Tuesday=1, ... Sunday=6
     const bestTimeDay = currentDay === 0 ? 6 : currentDay - 1;
 
-    // BestTime might use different keys for days - try multiple formats
-    let dayData = (analysis[bestTimeDay] || analysis[`day_int_${bestTimeDay}`]) as { day_raw?: Array<{ hour: number; intensity_nr?: number; intensity?: number }> } | undefined;
+    // BestTime uses string keys "0" through "6" for days
+    const dayKey = String(bestTimeDay);
+    let dayData = analysis[dayKey] as Record<string, unknown> | undefined;
 
-    // If no direct index, look for day_info array
+    // Log what we found for debugging
+    console.log(`BestTime day ${bestTimeDay} (key "${dayKey}") for ${venueName}: ${dayData ? Object.keys(dayData).join(', ') : 'NOT FOUND'}`);
+
+    if (!dayData) {
+      // Try numeric key
+      dayData = analysis[bestTimeDay] as Record<string, unknown> | undefined;
+    }
+
+    // If still no day data, try day_info array
     if (!dayData && analysis.day_info && Array.isArray(analysis.day_info)) {
-      dayData = (analysis.day_info as Array<{ day_int: number; day_raw?: Array<{ hour: number; intensity_nr?: number; intensity?: number }> }>).find((d) => d.day_int === bestTimeDay);
+      dayData = (analysis.day_info as Array<{ day_int: number }>).find((d) => d.day_int === bestTimeDay) as Record<string, unknown> | undefined;
     }
 
     // Also try week_raw if available
     if (!dayData && analysis.week_raw && Array.isArray(analysis.week_raw)) {
-      // week_raw is a flat array of 7*24 = 168 hourly values
       const hourIndex = bestTimeDay * 24 + currentHour;
       const intensity = (analysis.week_raw as number[])[hourIndex];
       if (intensity !== undefined) {
@@ -238,32 +246,56 @@ export class BestTimeProvider implements BusynessProvider {
       return null;
     }
 
-    // day_raw contains hourly data
-    const dayRaw = dayData.day_raw || (dayData as unknown as Array<{ hour: number; intensity_nr?: number; intensity?: number }>);
+    // Log the structure of dayData to understand it
+    console.log(`BestTime dayData structure for ${venueName}: ${JSON.stringify(dayData).substring(0, 500)}`);
+
+    // day_raw contains hourly data - try multiple possible keys
+    let dayRaw = dayData.day_raw as Array<Record<string, unknown>> | undefined;
+
+    // If no day_raw, check if dayData itself is an array or has different structure
+    if (!dayRaw) {
+      // Maybe the entire dayData is the hourly array
+      if (Array.isArray(dayData)) {
+        dayRaw = dayData;
+      } else {
+        // Log all keys to help debug
+        console.log(`No day_raw found, dayData keys: ${Object.keys(dayData).join(', ')}`);
+        return null;
+      }
+    }
+
     if (!Array.isArray(dayRaw)) {
       console.warn(`day_raw is not array for ${venueName}: ${typeof dayRaw}`);
       return null;
     }
 
-    // Find the busyness for current hour
-    const hourData = dayRaw.find((h) => h.hour === currentHour);
+    // Log first few entries to understand structure
+    console.log(`BestTime dayRaw sample for ${venueName}: ${JSON.stringify(dayRaw.slice(0, 3))}`);
+
+    // Find the busyness for current hour - try both 'hour' and other possible keys
+    const hourData = dayRaw.find((h) => h.hour === currentHour || h.hour_int === currentHour);
 
     let level: number | undefined;
-    if (hourData && hourData.intensity_nr !== undefined) {
-      level = hourData.intensity_nr;
-    } else if (hourData && hourData.intensity !== undefined) {
-      level = hourData.intensity;
+
+    if (hourData) {
+      // Try various possible field names for intensity
+      level = (hourData.intensity_nr ?? hourData.intensity ?? hourData.intensity_txt ?? hourData.raw) as number | undefined;
+      console.log(`Found hourData for hour ${currentHour}: ${JSON.stringify(hourData)}, extracted level: ${level}`);
     } else {
+      console.log(`No hourData found for hour ${currentHour}, trying nearest hour`);
       // Try to interpolate from nearby hours
-      const nearestHour = dayRaw.reduce((nearest: { hour: number; intensity_nr?: number; intensity?: number } | null, h) => {
+      const nearestHour = dayRaw.reduce((nearest: Record<string, unknown> | null, h) => {
         if (!nearest) return h;
-        const currentDiff = Math.abs(h.hour - currentHour);
-        const nearestDiff = Math.abs(nearest.hour - currentHour);
+        const hHour = (h.hour ?? h.hour_int) as number;
+        const nearestHourNum = (nearest.hour ?? nearest.hour_int) as number;
+        const currentDiff = Math.abs(hHour - currentHour);
+        const nearestDiff = Math.abs(nearestHourNum - currentHour);
         return currentDiff < nearestDiff ? h : nearest;
       }, null);
 
       if (nearestHour) {
-        level = nearestHour.intensity_nr ?? nearestHour.intensity;
+        level = (nearestHour.intensity_nr ?? nearestHour.intensity ?? nearestHour.intensity_txt ?? nearestHour.raw) as number | undefined;
+        console.log(`Using nearest hour: ${JSON.stringify(nearestHour)}, level: ${level}`);
       }
     }
 
