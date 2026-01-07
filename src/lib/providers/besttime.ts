@@ -226,47 +226,95 @@ export class BestTimeProvider implements BusynessProvider {
   }
 
   /**
-   * Search for a venue in BestTime's database
+   * Search for a venue in BestTime's database using the forecast/new endpoint
+   * This creates a new forecast and returns venue info
    */
   private async searchVenue(venue: Venue): Promise<string | null> {
     try {
       // Rate limiting
       await this.rateLimit();
 
-      const url = new URL(`${this.baseUrl}/venues/search`);
-      url.searchParams.append('api_key_private', this.apiKey);
-      url.searchParams.append('q', venue.name);
+      // Use the new forecast endpoint with venue name and location
+      const url = new URL(`${this.baseUrl}/forecasts`);
 
-      // Add location parameters if available
-      if (venue.latitude && venue.longitude) {
-        url.searchParams.append('lat', venue.latitude.toString());
-        url.searchParams.append('lng', venue.longitude.toString());
-        url.searchParams.append('radius', '500'); // 500 meter radius
+      // Build the request body
+      const body: Record<string, string | number> = {
+        api_key_private: this.apiKey,
+        venue_name: venue.name,
+        venue_address: `${venue.address}, Chicago, IL`,
+      };
+
+      const response = await fetch(url.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        // Try alternative: venue search with GET
+        console.log(`POST forecast failed, trying venue search for ${venue.name}`);
+        return this.searchVenueAlternative(venue);
       }
 
-      const response = await fetch(url.toString());
+      const data = await response.json();
+
+      if (data.status !== 'OK' || !data.venue_info?.venue_id) {
+        console.warn(`No BestTime venue found for ${venue.name}`);
+        return null;
+      }
+
+      const venueId = data.venue_info.venue_id;
+      console.log(`Found BestTime venue "${data.venue_info.venue_name}" (ID: ${venueId}) for "${venue.name}"`);
+
+      return venueId;
+    } catch (error) {
+      console.error('Error searching BestTime venues:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Alternative search using GET with query params
+   */
+  private async searchVenueAlternative(venue: Venue): Promise<string | null> {
+    try {
+      await this.rateLimit();
+
+      // Try the venues/search endpoint with different format
+      const params = new URLSearchParams({
+        api_key_private: this.apiKey,
+        venue_name: venue.name,
+        venue_address: `${venue.address}, Chicago, IL`,
+      });
+
+      const response = await fetch(`${this.baseUrl}/venues/search?${params}`);
 
       if (!response.ok) {
         console.error(`BestTime search error: ${response.status} ${response.statusText}`);
         return null;
       }
 
-      const data: BestTimeSearchResponse = await response.json();
+      const data = await response.json();
 
-      if (data.status !== 'OK' || !data.venues || data.venues.length === 0) {
-        console.warn(`No BestTime venues found for ${venue.name}`);
+      if (data.status !== 'OK') {
+        console.warn(`No BestTime venue found for ${venue.name}: ${data.message || 'Unknown error'}`);
         return null;
       }
 
-      // Return the first match
-      // In a production system, you might want to implement fuzzy matching
-      // to ensure you get the best match
-      const bestMatch = data.venues[0];
-      console.log(`Matched venue "${venue.name}" to BestTime venue "${bestMatch.venue_name}" (ID: ${bestMatch.venue_id})`);
+      // Handle different response formats
+      const venueId = data.venue_info?.venue_id || data.venues?.[0]?.venue_id;
 
-      return bestMatch.venue_id;
+      if (!venueId) {
+        console.warn(`No venue ID in BestTime response for ${venue.name}`);
+        return null;
+      }
+
+      console.log(`Found BestTime venue (alt) for "${venue.name}" (ID: ${venueId})`);
+      return venueId;
     } catch (error) {
-      console.error('Error searching BestTime venues:', error);
+      console.error('Error in alternative venue search:', error);
       return null;
     }
   }
