@@ -235,33 +235,42 @@ export class BestTimeProvider implements BusynessProvider {
       await this.rateLimit();
 
       // Use the new forecast endpoint with venue name and location
-      const url = new URL(`${this.baseUrl}/forecasts`);
+      // Try form-urlencoded format which BestTime might expect
+      const url = `${this.baseUrl}/forecasts`;
 
-      // Build the request body
-      const body: Record<string, string | number> = {
-        api_key_private: this.apiKey,
-        venue_name: venue.name,
-        venue_address: `${venue.address}, Chicago, IL`,
-      };
+      const params = new URLSearchParams();
+      params.append('api_key_private', this.apiKey);
+      params.append('venue_name', venue.name);
+      params.append('venue_address', venue.address);
 
-      const response = await fetch(url.toString(), {
+      console.log(`BestTime POST forecast for: ${venue.name} at ${venue.address}`);
+
+      const response = await fetch(url, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: JSON.stringify(body),
+        body: params.toString(),
       });
 
+      const responseText = await response.text();
+      console.log(`BestTime response status: ${response.status}, body preview: ${responseText.substring(0, 200)}`);
+
       if (!response.ok) {
-        // Try alternative: venue search with GET
-        console.log(`POST forecast failed, trying venue search for ${venue.name}`);
-        return this.searchVenueAlternative(venue);
+        console.log(`POST forecast failed (${response.status}), response: ${responseText.substring(0, 500)}`);
+        return null;
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        console.error('Failed to parse BestTime response as JSON');
+        return null;
+      }
 
       if (data.status !== 'OK' || !data.venue_info?.venue_id) {
-        console.warn(`No BestTime venue found for ${venue.name}`);
+        console.warn(`No BestTime venue found for ${venue.name}: ${data.message || JSON.stringify(data)}`);
         return null;
       }
 
@@ -276,61 +285,11 @@ export class BestTimeProvider implements BusynessProvider {
   }
 
   /**
-   * Alternative search using GET with query params
+   * We don't use this anymore - the POST /forecasts is the only way to search
    */
   private async searchVenueAlternative(venue: Venue): Promise<string | null> {
-    try {
-      await this.rateLimit();
-
-      // BestTime uses 'q' parameter for search query (name + location)
-      const searchQuery = `${venue.name} Chicago IL`;
-
-      const params = new URLSearchParams({
-        api_key_private: this.apiKey,
-        q: searchQuery,
-        num: '20',
-        fast: 'true',
-      });
-
-      // Add coordinates if available for better accuracy
-      if (venue.latitude && venue.longitude) {
-        params.append('lat', venue.latitude.toString());
-        params.append('lng', venue.longitude.toString());
-        params.append('radius', '1000');
-      }
-
-      const url = `${this.baseUrl}/venues/search?${params}`;
-      console.log(`BestTime search URL: ${url.replace(this.apiKey, 'API_KEY_HIDDEN')}`);
-
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`BestTime search error: ${response.status} ${response.statusText}`, errorText);
-        return null;
-      }
-
-      const data = await response.json();
-
-      if (data.status !== 'OK') {
-        console.warn(`No BestTime venue found for ${venue.name}: ${data.message || 'Unknown error'}`);
-        return null;
-      }
-
-      // Handle different response formats
-      const venueId = data.venue_info?.venue_id || data.venues?.[0]?.venue_id;
-
-      if (!venueId) {
-        console.warn(`No venue ID in BestTime response for ${venue.name}`);
-        return null;
-      }
-
-      console.log(`Found BestTime venue (alt) for "${venue.name}" (ID: ${venueId})`);
-      return venueId;
-    } catch (error) {
-      console.error('Error in alternative venue search:', error);
-      return null;
-    }
+    console.log(`No alternative search available for ${venue.name}`);
+    return null;
   }
 
   /**
