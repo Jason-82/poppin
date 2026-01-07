@@ -11,7 +11,7 @@ export function middleware(request: NextRequest) {
   // These routes have their own authentication via CRON_SECRET
   if (
     pathname === '/api/auth/verify' ||
-    pathname === '/api/admin/seed' ||
+    pathname.startsWith('/api/admin/') ||
     pathname.startsWith('/api/cron/')
   ) {
     return NextResponse.next();
