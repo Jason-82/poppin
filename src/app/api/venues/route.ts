@@ -111,10 +111,10 @@ export async function GET(request: NextRequest) {
       };
     }
 
-    // Parse limit (default 100, max 100)
+    // Parse limit (default 200, max 500)
     const limit = limitParam
-      ? Math.min(parseInt(limitParam, 10), 100)
-      : 100;
+      ? Math.min(parseInt(limitParam, 10), 500)
+      : 200;
 
     if (isNaN(limit) || limit < 1) {
       return NextResponse.json(

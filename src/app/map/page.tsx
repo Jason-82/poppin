@@ -46,7 +46,7 @@ export default function MapPage() {
           neLng: -87.52,
           swLat: 41.64,
           swLng: -87.94,
-          limit: 200,
+          limit: 500,
         });
         setVenues(data.venues);
       } catch (err) {
