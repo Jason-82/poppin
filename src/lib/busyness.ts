@@ -145,12 +145,36 @@ export async function fuseBusynessData(
     };
   }
 
+  // Check if the most recent observation shows venue is closed (level = -1)
+  // If so, return closed status directly
+  const mostRecentObs = observations[0]; // Already sorted by timestamp desc
+  if (mostRecentObs.level === -1) {
+    return {
+      level: -1, // Preserve closed status
+      confidence: 1, // High confidence - we know it's closed
+      trend: 'stable',
+      lastUpdated: mostRecentObs.timestamp,
+    };
+  }
+
+  // Filter out closed observations for averaging
+  const openObs = observations.filter(obs => obs.level >= 0 && obs.level <= 100);
+
+  if (openObs.length === 0) {
+    return {
+      level: 50,
+      confidence: 0,
+      trend: 'stable',
+      lastUpdated: currentTime,
+    };
+  }
+
   // Calculate weighted average
   let totalWeightedLevel = 0;
   let totalWeight = 0;
   let crowdWeight = 0;
 
-  for (const obs of observations) {
+  for (const obs of openObs) {
     const ageInMinutes =
       (currentTime.getTime() - obs.timestamp.getTime()) / (1000 * 60);
 
@@ -181,13 +205,13 @@ export async function fuseBusynessData(
   const fusedLevel = totalWeight > 0 ? totalWeightedLevel / totalWeight : 50;
 
   // Calculate confidence
-  const confidence = calculateConfidence(observations, currentTime);
+  const confidence = calculateConfidence(openObs, currentTime);
 
   // Calculate trend
-  const trend = calculateTrend(observations, currentTime);
+  const trend = calculateTrend(openObs, currentTime);
 
   // Get most recent timestamp
-  const lastUpdated = observations[0].timestamp;
+  const lastUpdated = openObs[0].timestamp;
 
   return {
     level: Math.round(fusedLevel),
@@ -246,12 +270,38 @@ export async function fuseBusynessDataBulk(
       continue;
     }
 
+    // Check if the most recent observation shows venue is closed (level = -1)
+    // If so, return closed status directly
+    const mostRecentObs = venueObs[0]; // Already sorted by timestamp desc
+    if (mostRecentObs.level === -1) {
+      results.set(venueId, {
+        level: -1, // Preserve closed status
+        confidence: 1, // High confidence - we know it's closed
+        trend: 'stable',
+        lastUpdated: mostRecentObs.timestamp,
+      });
+      continue;
+    }
+
+    // Filter out closed observations for averaging (only use open observations)
+    const openObs = venueObs.filter(obs => obs.level >= 0 && obs.level <= 100);
+
+    if (openObs.length === 0) {
+      results.set(venueId, {
+        level: 50,
+        confidence: 0,
+        trend: 'stable',
+        lastUpdated: currentTime,
+      });
+      continue;
+    }
+
     // Same fusion logic as single venue
     let totalWeightedLevel = 0;
     let totalWeight = 0;
     let crowdWeight = 0;
 
-    for (const obs of venueObs) {
+    for (const obs of openObs) {
       const ageInMinutes =
         (currentTime.getTime() - obs.timestamp.getTime()) / (1000 * 60);
 
@@ -278,14 +328,14 @@ export async function fuseBusynessDataBulk(
     }
 
     const fusedLevel = totalWeight > 0 ? totalWeightedLevel / totalWeight : 50;
-    const confidence = calculateConfidence(venueObs, currentTime);
-    const trend = calculateTrend(venueObs, currentTime);
+    const confidence = calculateConfidence(openObs, currentTime);
+    const trend = calculateTrend(openObs, currentTime);
 
     results.set(venueId, {
       level: Math.round(fusedLevel),
       confidence: Math.round(confidence * 100) / 100,
       trend,
-      lastUpdated: venueObs[0].timestamp,
+      lastUpdated: openObs[0].timestamp,
     });
   }
 
