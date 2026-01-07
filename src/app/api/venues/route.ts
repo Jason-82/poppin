@@ -3,18 +3,27 @@ import { prisma } from '@/lib/prisma';
 import { fuseBusynessDataBulk } from '@/lib/busyness';
 import { VenueType } from '@prisma/client';
 
+// Helper to get current Chicago time
+function getChicagoTime(): { day: number; hour: number } {
+  const now = new Date();
+  const chicagoTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+  return {
+    day: chicagoTime.getDay(),
+    hour: chicagoTime.getHours(),
+  };
+}
+
 // Helper to get current day of week (adjusted for nightlife - after midnight counts as previous day)
 function getCurrentDayOfWeek(): number {
-  const now = new Date();
-  const hour = now.getHours();
-  let day = now.getDay(); // 0=Sunday, 1=Monday, etc.
+  const { day, hour } = getChicagoTime();
+  let adjustedDay = day;
 
   // If it's between midnight and 5am, consider it still the previous night
   if (hour < 5) {
-    day = day === 0 ? 6 : day - 1;
+    adjustedDay = day === 0 ? 6 : day - 1;
   }
 
-  return day;
+  return adjustedDay;
 }
 
 /**

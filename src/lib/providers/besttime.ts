@@ -10,6 +10,17 @@ import { BusynessProvider, BusynessReading, BusynessForecast } from './types';
 import { Venue } from '@prisma/client';
 import { venueCache } from './besttime-cache';
 
+// Helper to get current time in Chicago timezone
+function getChicagoTime(): { day: number; hour: number } {
+  const now = new Date();
+  // Convert to Chicago time using Intl API
+  const chicagoTime = new Date(now.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+  return {
+    day: chicagoTime.getDay(), // 0 = Sunday, 6 = Saturday
+    hour: chicagoTime.getHours(),
+  };
+}
+
 interface BestTimeVenue {
   venue_id: string;
   venue_name: string;
@@ -195,9 +206,8 @@ export class BestTimeProvider implements BusynessProvider {
    * Uses hour_analysis array which contains structured hourly data with intensity_nr
    */
   private extractForecastData(venueName: string, data: { analysis?: Record<string, unknown> }): BusynessReading | null {
-    const now = new Date();
-    const currentDay = now.getDay(); // 0 = Sunday, 6 = Saturday
-    const currentHour = now.getHours();
+    // Use Chicago timezone for all time calculations
+    const { day: currentDay, hour: currentHour } = getChicagoTime();
 
     const analysis = data.analysis;
     if (!analysis) {
