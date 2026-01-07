@@ -282,17 +282,31 @@ export class BestTimeProvider implements BusynessProvider {
     try {
       await this.rateLimit();
 
-      // Try the venues/search endpoint with different format
+      // BestTime uses 'q' parameter for search query (name + location)
+      const searchQuery = `${venue.name} Chicago IL`;
+
       const params = new URLSearchParams({
         api_key_private: this.apiKey,
-        venue_name: venue.name,
-        venue_address: `${venue.address}, Chicago, IL`,
+        q: searchQuery,
+        num: '20',
+        fast: 'true',
       });
 
-      const response = await fetch(`${this.baseUrl}/venues/search?${params}`);
+      // Add coordinates if available for better accuracy
+      if (venue.latitude && venue.longitude) {
+        params.append('lat', venue.latitude.toString());
+        params.append('lng', venue.longitude.toString());
+        params.append('radius', '1000');
+      }
+
+      const url = `${this.baseUrl}/venues/search?${params}`;
+      console.log(`BestTime search URL: ${url.replace(this.apiKey, 'API_KEY_HIDDEN')}`);
+
+      const response = await fetch(url);
 
       if (!response.ok) {
-        console.error(`BestTime search error: ${response.status} ${response.statusText}`);
+        const errorText = await response.text();
+        console.error(`BestTime search error: ${response.status} ${response.statusText}`, errorText);
         return null;
       }
 
