@@ -234,22 +234,19 @@ export class BestTimeProvider implements BusynessProvider {
       // Rate limiting
       await this.rateLimit();
 
-      // BestTime API: PUT api_key_private in query string, venue data in JSON body
-      const url = `${this.baseUrl}/forecasts?api_key_private=${encodeURIComponent(this.apiKey)}`;
-
-      const body = {
+      // BestTime API: All parameters in query string
+      const params = new URLSearchParams({
+        api_key_private: this.apiKey,
         venue_name: venue.name,
         venue_address: venue.address,
-      };
+      });
+
+      const url = `${this.baseUrl}/forecasts?${params.toString()}`;
 
       console.log(`BestTime POST forecast for: ${venue.name} at ${venue.address}`);
 
       const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
       });
 
       const responseText = await response.text();
