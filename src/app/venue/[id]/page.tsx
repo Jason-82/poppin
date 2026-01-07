@@ -10,6 +10,8 @@ import TrendArrow from '@/components/venue/TrendArrow';
 import ConfidenceBadge from '@/components/venue/ConfidenceBadge';
 import FavoriteButton from '@/components/venue/FavoriteButton';
 import ReportVibeModal from '@/components/venue/ReportVibeModal';
+import VideoUpload from '@/components/venue/VideoUpload';
+import VenueVideos from '@/components/venue/VenueVideos';
 import { getVenue, VenueDetail } from '@/lib/api';
 
 export default function VenuePage() {
@@ -21,6 +23,7 @@ export default function VenuePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [videoRefreshKey, setVideoRefreshKey] = useState(0);
 
   useEffect(() => {
     const fetchVenue = async () => {
@@ -44,6 +47,11 @@ export default function VenuePage() {
   const handleReportSuccess = () => {
     // Refetch venue data after successful report
     getVenue(venueId).then(setVenue);
+  };
+
+  const handleVideoUploadSuccess = () => {
+    // Trigger video list refresh
+    setVideoRefreshKey((prev) => prev + 1);
   };
 
   if (isLoading) {
@@ -157,6 +165,27 @@ export default function VenuePage() {
               Report Vibe
             </Button>
           </div>
+        </Card>
+
+        {/* Live Videos Section */}
+        <Card className="mb-6">
+          <h2 className="text-xl font-semibold text-white mb-4">Live Videos</h2>
+
+          {/* Video Upload */}
+          <div className="mb-6">
+            <VideoUpload
+              venueId={venue.id}
+              venueName={venue.name}
+              onSuccess={handleVideoUploadSuccess}
+            />
+          </div>
+
+          {/* Video Display */}
+          <VenueVideos
+            key={videoRefreshKey}
+            venueId={venue.id}
+            onRefresh={handleVideoUploadSuccess}
+          />
         </Card>
 
         {/* Recent Reports */}

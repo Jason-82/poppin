@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import ServiceWorkerRegistration from "@/components/ServiceWorkerRegistration";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,7 +19,17 @@ export const metadata: Metadata = {
   keywords: ["Chicago", "nightlife", "bars", "clubs", "latin dance", "busyness", "crowdsourced"],
   authors: [{ name: "Poppin" }],
   viewport: "width=device-width, initial-scale=1, maximum-scale=1",
-  themeColor: "#000000",
+  themeColor: "#7c3aed",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Poppin",
+  },
+  icons: {
+    icon: "/icons/icon-192.png",
+    apple: "/icons/icon-192.png",
+  },
 };
 
 export default function RootLayout({
@@ -34,6 +45,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-black text-white`}
       >
+        <ServiceWorkerRegistration />
         {children}
       </body>
     </html>

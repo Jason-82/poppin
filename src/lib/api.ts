@@ -117,3 +117,77 @@ export async function getVenueBusyness(venueId: string, hours: number = 24) {
 
   return response.json();
 }
+
+// Video-related types and functions
+
+export interface VenueVideo {
+  id: string;
+  videoUrl: string;
+  thumbnailUrl?: string | null;
+  createdAt: string;
+  expiresAt: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export interface VenueVideosResponse {
+  videos: VenueVideo[];
+  count: number;
+}
+
+// Get videos for a venue
+export async function getVenueVideos(venueId: string): Promise<VenueVideosResponse> {
+  const response = await fetch(`/api/venues/${venueId}/video`);
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch videos');
+  }
+
+  return response.json();
+}
+
+// Upload video for a venue
+export async function uploadVenueVideo(
+  venueId: string,
+  videoFile: File,
+  gpsCoords?: { latitude: number; longitude: number }
+): Promise<{ success: boolean; videoId: string; expiresAt: string; message: string }> {
+  const formData = new FormData();
+  formData.append('video', videoFile);
+
+  if (gpsCoords) {
+    formData.append('latitude', gpsCoords.latitude.toString());
+    formData.append('longitude', gpsCoords.longitude.toString());
+  }
+
+  const response = await fetch(`/api/venues/${venueId}/video`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to upload video');
+  }
+
+  return response.json();
+}
+
+// Delete a video
+export async function deleteVenueVideo(
+  venueId: string,
+  videoId: string
+): Promise<{ success: boolean; message: string }> {
+  const response = await fetch(`/api/venues/${venueId}/video`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ videoId }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to delete video');
+  }
+
+  return response.json();
+}

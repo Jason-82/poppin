@@ -26,6 +26,7 @@ model Venue {
 
   busynessObservations BusynessObservation[]
   crowdReports         CrowdReport[]
+  videos               VenueVideo[]
 
   @@index([latitude, longitude])
   @@index([type])
@@ -75,4 +76,20 @@ enum CrowdLevel {
   warm
   busy
   packed
+}
+
+model VenueVideo {
+  id            String   @id @default(cuid())
+  venueId       String
+  venue         Venue    @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  videoUrl      String   // Base64 encoded video for MVP (switch to Supabase later)
+  thumbnailUrl  String?  // Optional thumbnail
+  browserToken  String   // Who uploaded
+  latitude      Float?   // GPS verification
+  longitude     Float?   // GPS verification
+  expiresAt     DateTime // Auto-delete after 4 hours
+  createdAt     DateTime @default(now())
+
+  @@index([venueId, createdAt])
+  @@index([expiresAt])
 }

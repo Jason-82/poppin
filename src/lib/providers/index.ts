@@ -7,13 +7,14 @@
 
 import { BusynessProvider } from './types';
 import { MockProvider } from './mock';
+import { BestTimeProvider } from './besttime';
 
 /**
  * Get the active busyness provider based on environment configuration
  *
  * To switch providers, set BUSYNESS_PROVIDER environment variable:
  * - "mock" (default): Use MockProvider for testing
- * - "besttime": Use BestTime API (implementation needed)
+ * - "besttime": Use BestTime API
  * - "google": Use Google Places API (implementation needed)
  */
 export function getProvider(): BusynessProvider {
@@ -23,9 +24,19 @@ export function getProvider(): BusynessProvider {
     case 'mock':
       return new MockProvider();
 
+    case 'besttime': {
+      const provider = new BestTimeProvider();
+      // Fall back to mock if API key is not configured
+      if (!process.env.BESTTIME_API_KEY && !process.env.BUSYNESS_PROVIDER_API_KEY) {
+        console.warn(
+          'BESTTIME_API_KEY not configured, falling back to MockProvider'
+        );
+        return new MockProvider();
+      }
+      return provider;
+    }
+
     // Future providers can be added here:
-    // case 'besttime':
-    //   return new BestTimeProvider();
     // case 'google':
     //   return new GooglePlacesProvider();
 
@@ -38,7 +49,8 @@ export function getProvider(): BusynessProvider {
 }
 
 /**
- * Export types for use in other modules
+ * Export types and providers for use in other modules
  */
 export type { BusynessProvider, BusynessReading, BusynessForecast } from './types';
 export { MockProvider } from './mock';
+export { BestTimeProvider } from './besttime';
