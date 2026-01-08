@@ -13,15 +13,22 @@
 import { Venue, VenueType } from '@prisma/client';
 import { BusynessProvider, BusynessReading, BusynessForecast } from './types';
 
+// Helper to get Chicago time from any Date
+function getChicagoTime(date: Date = new Date()): Date {
+  return new Date(date.toLocaleString('en-US', { timeZone: 'America/Chicago' }));
+}
+
 export class MockProvider implements BusynessProvider {
   name = 'MockProvider';
 
   /**
    * Get current busyness level for a venue based on time patterns
+   * Uses Chicago timezone for accurate nightlife patterns
    */
   async getBusynessNow(venue: Venue): Promise<BusynessReading | null> {
     const now = new Date();
-    const level = this.calculateBusynessLevel(venue, now);
+    const chicagoNow = getChicagoTime(now);
+    const level = this.calculateBusynessLevel(venue, chicagoNow);
 
     // Add some randomness to simulate real-world variation (±10%)
     const randomVariation = (Math.random() - 0.5) * 20;
@@ -43,11 +50,12 @@ export class MockProvider implements BusynessProvider {
 
     for (let i = 0; i < hours; i++) {
       const futureTime = new Date(now.getTime() + i * 60 * 60 * 1000);
-      const level = this.calculateBusynessLevel(venue, futureTime);
+      const chicagoFutureTime = getChicagoTime(futureTime);
+      const level = this.calculateBusynessLevel(venue, chicagoFutureTime);
 
       forecast.push({
-        hour: futureTime.getHours(),
-        dayOfWeek: futureTime.getDay(),
+        hour: chicagoFutureTime.getHours(),
+        dayOfWeek: chicagoFutureTime.getDay(),
         expectedLevel: Math.round(level),
       });
     }
