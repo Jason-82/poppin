@@ -234,10 +234,9 @@ export async function getUserStats(userId: string) {
     points: user.points,
     reportsCount: user.reportsCount,
     videosCount: user.videosCount,
-    badges: user.badges.map((badgeId: string) => ({
-      id: badgeId,
-      ...BADGES[badgeId as BadgeId],
-    })),
+    badges: user.badges.map((badgeId: string) =>
+      BADGES[badgeId as BadgeId]
+    ),
     nextBadges,
   };
 }
