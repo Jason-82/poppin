@@ -76,11 +76,14 @@ export default function MapPage() {
     if (selectedBusyness !== 'all') {
       filtered = filtered.filter(v => {
         const level = v.currentBusyness.level;
+        const confidence = v.currentBusyness.confidence;
         switch (selectedBusyness) {
           case 'packed':
-            return level > 75; // Purple pulsing - truly poppin!
+            // Must have actual data (confidence > 0) and be truly poppin
+            return confidence > 0 && level > 75;
           case 'busy':
-            return level > 50; // Busy or packed
+            // Must have actual data (confidence > 0) and be busy or packed
+            return confidence > 0 && level > 50;
           case 'open':
             return level >= 0; // Not closed (-1 means closed)
           default:
