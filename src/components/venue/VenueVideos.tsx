@@ -24,6 +24,7 @@ export default function VenueVideos({ venueId, onRefresh }: VenueVideosProps) {
   const [error, setError] = useState<string | null>(null);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [videoError, setVideoError] = useState(false);
 
   const videoPlayerRef = useRef<HTMLVideoElement>(null);
 
@@ -91,6 +92,7 @@ export default function VenueVideos({ venueId, onRefresh }: VenueVideosProps) {
 
   // Play video
   const handlePlayVideo = (video: Video) => {
+    setVideoError(false);
     setSelectedVideo(video);
   };
 
@@ -248,13 +250,32 @@ export default function VenueVideos({ venueId, onRefresh }: VenueVideosProps) {
             </button>
 
             {/* Video player */}
-            <video
-              ref={videoPlayerRef}
-              src={selectedVideo.videoUrl}
-              controls
-              autoPlay
-              className="w-full rounded-lg bg-black"
-            />
+            {videoError ? (
+              <div className="w-full aspect-video bg-zinc-900 rounded-lg flex flex-col items-center justify-center p-8 text-center">
+                <svg className="w-16 h-16 text-zinc-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                <p className="text-zinc-400 mb-2">This video format isn&apos;t supported in your browser</p>
+                <p className="text-zinc-500 text-sm mb-4">iPhone videos may not play in Chrome/Firefox. Try Safari or download the video.</p>
+                <a
+                  href={selectedVideo.videoUrl}
+                  download={`poppin-video-${selectedVideo.id}.mp4`}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                >
+                  Download Video
+                </a>
+              </div>
+            ) : (
+              <video
+                ref={videoPlayerRef}
+                src={selectedVideo.videoUrl}
+                controls
+                autoPlay
+                playsInline
+                className="w-full rounded-lg bg-black"
+                onError={() => setVideoError(true)}
+              />
+            )}
 
             {/* Video info */}
             <div className="mt-4 text-white">
