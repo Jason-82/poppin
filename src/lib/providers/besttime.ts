@@ -192,21 +192,20 @@ export class BestTimeProvider implements BusynessProvider {
       }
 
       // BestTime live busyness is RELATIVE to the forecast: -100 to +100
-      // E.g., -30 means "30% fewer visitors than forecasted for this hour"
-      // Formula: absolute = forecast * (1 + relative/100)
-      // If forecast is 80% and relative is -30%, then: 80 * 0.70 = 56%
+      // E.g., -30 means "30 percentage points below the forecast for this hour"
+      // Based on BestTime's UI visualization, this appears to be ADDITIVE:
+      // Formula: absolute = forecast + relative
+      // If forecast is 80% and relative is -30, then: 80 + (-30) = 50%
       let absoluteLevel: number;
 
-      if (forecastLevel !== undefined && forecastLevel !== null && !isNaN(forecastLevel) && forecastLevel > 0) {
-        // We have forecast data - apply live deviation to it
-        absoluteLevel = forecastLevel * (1 + relativeLevel / 100);
-        console.log(`BestTime LIVE: ${venueName} - Forecast ${forecastLevel}%, Live ${relativeLevel}% -> Absolute ${Math.round(absoluteLevel)}%`);
+      if (forecastLevel !== undefined && forecastLevel !== null && !isNaN(forecastLevel) && forecastLevel >= 0) {
+        // We have forecast data - apply live deviation (additive)
+        absoluteLevel = forecastLevel + relativeLevel;
+        console.log(`BestTime LIVE: ${venueName} - Forecast ${forecastLevel}% + Live ${relativeLevel}% = Absolute ${Math.round(absoluteLevel)}%`);
       } else {
-        // No forecast available - use simpler conversion assuming 50% baseline
-        // This is less accurate but better than nothing
-        const clampedRelative = Math.max(-100, Math.min(100, relativeLevel));
-        absoluteLevel = 50 * (1 + clampedRelative / 100);
-        console.log(`BestTime LIVE (no forecast): ${venueName} - Live ${relativeLevel}% -> Absolute ${Math.round(absoluteLevel)}%`);
+        // No forecast available - use 50% baseline + deviation
+        absoluteLevel = 50 + relativeLevel;
+        console.log(`BestTime LIVE (no forecast): ${venueName} - 50% + Live ${relativeLevel}% = Absolute ${Math.round(absoluteLevel)}%`);
       }
 
       // Clamp to valid range
