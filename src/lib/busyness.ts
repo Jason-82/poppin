@@ -187,6 +187,9 @@ export async function fuseBusynessData(
     };
   }
 
+  // Get expected busyness for sanity checking provider data
+  const expected = getExpectedBusyness(effectiveVenueType, currentTime);
+
   // Separate crowd and provider observations
   const crowdObs = observations.filter((o: BusynessObservation) => o.source === 'crowd');
   const providerObs = observations.filter((o: BusynessObservation) => o.source === 'provider');
@@ -201,15 +204,22 @@ export async function fuseBusynessData(
     const recencyWeight = calculateRecencyWeight(ageInMinutes);
     const sourceWeight = SOURCE_WEIGHTS[obs.source] || 1.0;
 
-    // Apply sanity check penalty to provider data
+    let effectiveLevel = obs.level;
     let sanityMultiplier = 1.0;
+
+    // For provider data, apply sanity check and blend toward expected if suspicious
     if (obs.source === 'provider') {
       const validation = validateLiveReading(obs.level, effectiveVenueType, currentTime);
       sanityMultiplier = validation.confidenceMultiplier;
+
+      // If reading is suspicious, blend it 50% toward expected value
+      if (!validation.isReasonable) {
+        effectiveLevel = Math.round(obs.level * 0.5 + expected.expectedLevel * 0.5);
+      }
     }
 
     const finalWeight = recencyWeight * sourceWeight * sanityMultiplier;
-    weightedSum += obs.level * finalWeight;
+    weightedSum += effectiveLevel * finalWeight;
     totalWeight += finalWeight;
 
     if (obs.timestamp > mostRecentTimestamp) {
@@ -324,6 +334,9 @@ export async function fuseBusynessDataBulk(
       continue;
     }
 
+    // Get expected busyness for sanity checking provider data
+    const expected = getExpectedBusyness(venueType, currentTime);
+
     // Separate crowd and provider observations
     const crowdObs = venueObs.filter((o: BusynessObservation) => o.source === 'crowd');
 
@@ -337,15 +350,22 @@ export async function fuseBusynessDataBulk(
       const recencyWeight = calculateRecencyWeight(ageInMinutes);
       const sourceWeight = SOURCE_WEIGHTS[obs.source] || 1.0;
 
-      // Apply sanity check penalty to provider data
+      let effectiveLevel = obs.level;
       let sanityMultiplier = 1.0;
+
+      // For provider data, apply sanity check and blend toward expected if suspicious
       if (obs.source === 'provider') {
         const validation = validateLiveReading(obs.level, venueType, currentTime);
         sanityMultiplier = validation.confidenceMultiplier;
+
+        // If reading is suspicious, blend it 50% toward expected value
+        if (!validation.isReasonable) {
+          effectiveLevel = Math.round(obs.level * 0.5 + expected.expectedLevel * 0.5);
+        }
       }
 
       const finalWeight = recencyWeight * sourceWeight * sanityMultiplier;
-      weightedSum += obs.level * finalWeight;
+      weightedSum += effectiveLevel * finalWeight;
       totalWeight += finalWeight;
 
       if (obs.timestamp > mostRecentTimestamp) {
