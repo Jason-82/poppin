@@ -1,10 +1,10 @@
 /**
  * Cron Ingestion Endpoint
  *
- * Fetches current busyness data from the provider for all venues
- * and stores it in the database as BusynessObservation records.
+ * Fetches current busyness data from the provider for venues in batches.
+ * Each run processes ~50 venues to stay within Vercel's timeout limits.
  *
- * This endpoint is called by Vercel Cron every 15 minutes.
+ * With 8 batches running every 5 minutes, all venues are updated every 40 minutes.
  * It's secured with a CRON_SECRET header to prevent unauthorized access.
  */
 
@@ -13,10 +13,14 @@ import { prisma } from '@/lib/prisma';
 import { getProvider } from '@/lib/providers';
 import { BusynessSource } from '@prisma/client';
 
+// Batch configuration
+const VENUES_PER_BATCH = 50;
+const TOTAL_BATCHES = 8;
+
 /**
  * GET /api/cron/ingest
  *
- * Verifies CRON_SECRET, fetches all venues, gets busyness from provider,
+ * Verifies CRON_SECRET, fetches a batch of venues, gets busyness from provider,
  * and creates BusynessObservation records.
  */
 export async function GET(request: NextRequest) {
@@ -38,7 +42,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  console.log('[CRON] Starting busyness ingestion job');
+  // Determine which batch to process based on current time
+  // Each 5-minute interval processes a different batch
+  const now = new Date();
+  const minuteOfDay = now.getHours() * 60 + now.getMinutes();
+  const batchIndex = Math.floor(minuteOfDay / 5) % TOTAL_BATCHES;
+
+  console.log(`[CRON] Starting busyness ingestion job - Batch ${batchIndex + 1}/${TOTAL_BATCHES}`);
 
   let venuesProcessed = 0;
   let observationsCreated = 0;
@@ -46,11 +56,14 @@ export async function GET(request: NextRequest) {
 
   try {
     // Fetch all active venues from database
-    const venues = await prisma.venue.findMany({
+    const allVenues = await prisma.venue.findMany({
       orderBy: { name: 'asc' },
     });
 
-    console.log(`[CRON] Found ${venues.length} venues to process`);
+    // Select venues for this batch using modulo
+    const venues = allVenues.filter((_, index) => index % TOTAL_BATCHES === batchIndex);
+
+    console.log(`[CRON] Processing ${venues.length} venues (batch ${batchIndex + 1} of ${TOTAL_BATCHES}, total: ${allVenues.length})`);
 
     // Get the active provider
     const provider = getProvider();
@@ -101,6 +114,8 @@ export async function GET(request: NextRequest) {
 
     const summary = {
       success: true,
+      batch: batchIndex + 1,
+      totalBatches: TOTAL_BATCHES,
       venuesProcessed,
       observationsCreated,
       errors,
@@ -108,7 +123,7 @@ export async function GET(request: NextRequest) {
       provider: provider.name,
     };
 
-    console.log('[CRON] Ingestion job completed:', summary);
+    console.log(`[CRON] Batch ${batchIndex + 1}/${TOTAL_BATCHES} completed:`, summary);
 
     return NextResponse.json(summary, { status: 200 });
   } catch (error) {
