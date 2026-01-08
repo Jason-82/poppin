@@ -183,33 +183,21 @@ export class BestTimeProvider implements BusynessProvider {
         return null;
       }
 
-      const relativeLevel = data.analysis.venue_live_busyness;
+      // BestTime venue_live_busyness is ALREADY an absolute value (0-150%+)
+      // It represents current busyness where 100% = busiest hour of the week
+      // The -30% shown on their website is venue_live_forecasted_delta, not this field
+      const liveLevel = data.analysis.venue_live_busyness;
       const forecastLevel = data.analysis.venue_forecasted_busyness;
 
-      if (relativeLevel === undefined || relativeLevel === null || isNaN(relativeLevel)) {
-        console.log(`Invalid live level for ${venueName}: ${relativeLevel}`);
+      if (liveLevel === undefined || liveLevel === null || isNaN(liveLevel)) {
+        console.log(`Invalid live level for ${venueName}: ${liveLevel}`);
         return null;
       }
 
-      // BestTime live busyness is RELATIVE to the forecast: -100 to +100
-      // E.g., -30 means "30% fewer visitors than forecasted" (multiplicative)
-      // Formula: absolute = forecast × (1 + relative/100)
-      // If forecast is 80% and relative is -30, then: 80 × 0.70 = 56%
-      // This is semantically correct: "30% less" = multiply by 0.70
-      let absoluteLevel: number;
+      // Cap at 100 for our display (values can exceed 100 during unusually busy times)
+      const absoluteLevel = Math.min(100, Math.max(0, liveLevel));
 
-      if (forecastLevel !== undefined && forecastLevel !== null && !isNaN(forecastLevel) && forecastLevel > 0) {
-        // We have forecast data - apply live deviation (multiplicative)
-        absoluteLevel = forecastLevel * (1 + relativeLevel / 100);
-        console.log(`BestTime LIVE: ${venueName} - Forecast ${forecastLevel}% × ${(1 + relativeLevel / 100).toFixed(2)} = Absolute ${Math.round(absoluteLevel)}%`);
-      } else {
-        // No forecast available - use 50% baseline with multiplicative deviation
-        absoluteLevel = 50 * (1 + relativeLevel / 100);
-        console.log(`BestTime LIVE (no forecast): ${venueName} - 50% × ${(1 + relativeLevel / 100).toFixed(2)} = Absolute ${Math.round(absoluteLevel)}%`);
-      }
-
-      // Clamp to valid range
-      absoluteLevel = Math.max(0, Math.min(100, absoluteLevel));
+      console.log(`BestTime LIVE: ${venueName} - Live ${liveLevel}%${forecastLevel !== undefined ? ` (forecast was ${forecastLevel}%)` : ''} -> Using ${Math.round(absoluteLevel)}%`);
 
       return {
         level: Math.round(absoluteLevel),
