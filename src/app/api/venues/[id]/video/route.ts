@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { getBrowserToken } from '@/lib/auth';
-import { getClientIP, hashIP, rateLimitByIP, rateLimitByToken } from '@/lib/rateLimit';
+import { authOptions } from '@/lib/auth-options';
+import { getClientIP, rateLimitByIP, rateLimitByToken } from '@/lib/rateLimit';
+import { awardPoints, POINTS } from '@/lib/gamification';
 
 /**
  * Calculate distance between two GPS coordinates in meters using Haversine formula
@@ -141,6 +144,10 @@ export async function POST(
     // Set expiration time (4 hours from now)
     const expiresAt = new Date(Date.now() + 4 * 60 * 60 * 1000);
 
+    // Check if user is authenticated
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id || null;
+
     // Create video record
     const video = await prisma.venueVideo.create({
       data: {
@@ -149,9 +156,26 @@ export async function POST(
         browserToken,
         latitude,
         longitude,
+        userId, // Link to authenticated user if available
         expiresAt,
       },
     });
+
+    // Award points if user is authenticated
+    let pointsResult = null;
+    if (userId) {
+      try {
+        pointsResult = await awardPoints(
+          userId,
+          POINTS.VIDEO_UPLOADED,
+          'video',
+          isGpsVerified
+        );
+      } catch (err) {
+        console.error('Error awarding points:', err);
+        // Don't fail the request if points fail
+      }
+    }
 
     return NextResponse.json(
       {
@@ -162,6 +186,13 @@ export async function POST(
         message: isGpsVerified
           ? 'Video uploaded successfully (GPS verified)'
           : 'Video uploaded successfully (unverified location)',
+        ...(pointsResult && {
+          points: {
+            awarded: pointsResult.pointsAwarded,
+            total: pointsResult.totalPoints,
+            newBadges: pointsResult.newBadges,
+          },
+        }),
       },
       { status: 201 }
     );

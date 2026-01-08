@@ -99,12 +99,19 @@ export async function getVenue(id: string): Promise<VenueDetail> {
   return response.json();
 }
 
+// Points response from gamification
+export interface PointsResponse {
+  awarded: number;
+  total: number;
+  newBadges: string[];
+}
+
 // Submit crowd report
 export async function submitReport(
   venueId: string,
   level: 'dead' | 'warm' | 'busy' | 'packed',
   tags?: string[]
-): Promise<{ success: boolean; reportId: string; message: string }> {
+): Promise<{ success: boolean; reportId: string; message: string; points?: PointsResponse }> {
   const response = await fetch(`/api/venues/${venueId}/report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -163,7 +170,7 @@ export async function uploadVenueVideo(
   venueId: string,
   videoFile: File,
   gpsCoords?: { latitude: number; longitude: number }
-): Promise<{ success: boolean; videoId: string; expiresAt: string; message: string }> {
+): Promise<{ success: boolean; videoId: string; expiresAt: string; gpsVerified: boolean; message: string; points?: PointsResponse }> {
   const formData = new FormData();
   formData.append('video', videoFile);
 

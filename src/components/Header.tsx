@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import UserMenu from '@/components/auth/UserMenu';
 
 export default function Header() {
   const pathname = usePathname();
@@ -17,7 +18,7 @@ export default function Header() {
             Poppin
           </Link>
 
-          <nav className="flex items-center gap-6">
+          <nav className="flex items-center gap-4 sm:gap-6">
             <Link
               href="/map"
               className={`text-sm font-medium transition-colors ${
@@ -50,8 +51,9 @@ export default function Header() {
                   d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
                 />
               </svg>
-              Favorites
+              <span className="hidden sm:inline">Favorites</span>
             </Link>
+            <UserMenu />
           </nav>
         </div>
       </div>

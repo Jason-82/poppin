@@ -67,11 +67,14 @@ model CrowdReport {
   browserToken  String          // Fingerprint/session identifier
   ipAddress     String
   userAgent     String?
+  userId        String?         // Optional: linked to authenticated user
+  user          User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt     DateTime        @default(now())
 
   @@index([venueId, createdAt])
   @@index([createdAt])
   @@index([browserToken])
+  @@index([userId])
 }
 
 enum CrowdLevel {
@@ -90,11 +93,14 @@ model VenueVideo {
   browserToken  String   // Who uploaded
   latitude      Float?   // GPS verification
   longitude     Float?   // GPS verification
+  userId        String?  // Optional: linked to authenticated user
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   expiresAt     DateTime // Auto-delete after 4 hours
   createdAt     DateTime @default(now())
 
   @@index([venueId, createdAt])
   @@index([expiresAt])
+  @@index([userId])
 }
 
 // Recurring events at venues (e.g., Latin dance nights at bars)
@@ -126,4 +132,62 @@ enum EventType {
   karaoke
   trivia
   other
+}
+
+// NextAuth.js models for Google OAuth
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+
+  // Points and gamification
+  points        Int       @default(0)
+  reportsCount  Int       @default(0)
+  videosCount   Int       @default(0)
+  badges        String[]  // Array of badge IDs earned
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  crowdReports  CrowdReport[]
+  venueVideos   VenueVideo[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }

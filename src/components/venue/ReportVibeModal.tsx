@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
+import { useSession } from 'next-auth/react';
 import Button from '@/components/ui/Button';
-import { submitReport } from '@/lib/api';
+import { submitReport, PointsResponse } from '@/lib/api';
+import { BADGES, BadgeId } from '@/lib/gamification';
 
 interface ReportVibeModalProps {
   venueId: string;
@@ -37,12 +39,22 @@ export default function ReportVibeModal({
   onClose,
   onSuccess,
 }: ReportVibeModalProps) {
+  const { data: session } = useSession();
   const [selectedLevel, setSelectedLevel] = useState<'dead' | 'warm' | 'busy' | 'packed' | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successData, setSuccessData] = useState<PointsResponse | null>(null);
 
   if (!isOpen) return null;
+
+  const handleClose = () => {
+    setSuccessData(null);
+    setSelectedLevel(null);
+    setSelectedTags([]);
+    setError(null);
+    onClose();
+  };
 
   const handleSubmit = async () => {
     if (!selectedLevel) {
@@ -54,12 +66,15 @@ export default function ReportVibeModal({
     setError(null);
 
     try {
-      await submitReport(venueId, selectedLevel, selectedTags);
+      const result = await submitReport(venueId, selectedLevel, selectedTags);
       onSuccess?.();
-      onClose();
-      // Reset form
-      setSelectedLevel(null);
-      setSelectedTags([]);
+
+      // If user earned points, show success screen
+      if (result.points) {
+        setSuccessData(result.points);
+      } else {
+        handleClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit report');
     } finally {
@@ -72,6 +87,51 @@ export default function ReportVibeModal({
       prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
     );
   };
+
+  // Success screen showing points earned
+  if (successData) {
+    const newBadges = successData.newBadges.map((id) => BADGES[id as BadgeId]).filter(Boolean);
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 max-w-md w-full text-center">
+          <div className="text-5xl mb-4">+{successData.awarded}</div>
+          <h2 className="text-2xl font-bold text-white mb-2">Points Earned!</h2>
+          <p className="text-zinc-400 mb-4">
+            Thanks for reporting the vibe at {venueName}
+          </p>
+
+          <div className="flex items-center justify-center gap-1 text-lg text-yellow-400 mb-6">
+            <span>Total: {successData.total} pts</span>
+          </div>
+
+          {newBadges.length > 0 && (
+            <div className="mb-6">
+              <div className="text-sm text-zinc-400 mb-2">New Badges Earned!</div>
+              <div className="flex flex-wrap justify-center gap-2">
+                {newBadges.map((badge) => (
+                  <div
+                    key={badge.id}
+                    className="flex items-center gap-2 px-3 py-2 bg-purple-900/30 border border-purple-500 rounded-lg"
+                  >
+                    <span className="text-2xl">{badge.icon}</span>
+                    <div className="text-left">
+                      <div className="font-medium text-white">{badge.name}</div>
+                      <div className="text-xs text-zinc-400">{badge.description}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Button variant="primary" onClick={handleClose} className="w-full">
+            Done
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
@@ -132,6 +192,15 @@ export default function ReportVibeModal({
           </div>
         )}
 
+        {/* Sign-in prompt for non-authenticated users */}
+        {!session && (
+          <div className="mb-4 p-3 bg-purple-900/20 border border-purple-700 rounded-lg">
+            <p className="text-sm text-purple-300">
+              Sign in to earn points and badges for your reports!
+            </p>
+          </div>
+        )}
+
         {/* Privacy Notice */}
         <div className="mb-4 p-3 bg-zinc-800/50 border border-zinc-700 rounded-lg">
           <p className="text-xs text-zinc-400">
@@ -144,7 +213,7 @@ export default function ReportVibeModal({
         <div className="flex gap-3">
           <Button
             variant="secondary"
-            onClick={onClose}
+            onClick={handleClose}
             disabled={isSubmitting}
             className="flex-1"
           >

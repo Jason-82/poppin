@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getServerSession } from 'next-auth';
 import { prisma } from '@/lib/prisma';
 import { getBrowserToken } from '@/lib/auth';
+import { authOptions } from '@/lib/auth-options';
 import { checkReportRateLimit, getClientIP, hashIP } from '@/lib/rateLimit';
 import { crowdLevelToNumeric } from '@/lib/busyness';
+import { awardPoints, POINTS } from '@/lib/gamification';
 import { CrowdLevel } from '@prisma/client';
 
 const VALID_CROWD_LEVELS: CrowdLevel[] = ['dead', 'warm', 'busy', 'packed'];
@@ -103,6 +106,10 @@ export async function POST(
     // Hash IP address for privacy-preserving storage
     const hashedIP = hashIP(ipAddress);
 
+    // Check if user is authenticated
+    const session = await getServerSession(authOptions);
+    const userId = session?.user?.id || null;
+
     // Create crowd report
     const report = await prisma.crowdReport.create({
       data: {
@@ -112,6 +119,7 @@ export async function POST(
         browserToken,
         ipAddress: hashedIP, // Store hashed IP, not plain text
         userAgent,
+        userId, // Link to authenticated user if available
       },
     });
 
@@ -126,11 +134,29 @@ export async function POST(
       },
     });
 
+    // Award points if user is authenticated
+    let pointsResult = null;
+    if (userId) {
+      try {
+        pointsResult = await awardPoints(userId, POINTS.REPORT_SUBMITTED, 'report');
+      } catch (err) {
+        console.error('Error awarding points:', err);
+        // Don't fail the request if points fail
+      }
+    }
+
     return NextResponse.json(
       {
         success: true,
         reportId: report.id,
         message: 'Report submitted successfully',
+        ...(pointsResult && {
+          points: {
+            awarded: pointsResult.pointsAwarded,
+            total: pointsResult.totalPoints,
+            newBadges: pointsResult.newBadges,
+          },
+        }),
       },
       { status: 201 }
     );
