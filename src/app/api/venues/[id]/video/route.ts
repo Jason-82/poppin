@@ -49,7 +49,41 @@ export async function POST(
       );
     }
 
-    // Get browser token and IP
+    // Parse form data FIRST before rate limiting (so bad requests don't count)
+    const formData = await request.formData();
+    const videoFile = formData.get('video') as File | null;
+    const latitude = formData.get('latitude')
+      ? parseFloat(formData.get('latitude') as string)
+      : null;
+    const longitude = formData.get('longitude')
+      ? parseFloat(formData.get('longitude') as string)
+      : null;
+
+    if (!videoFile) {
+      return NextResponse.json(
+        { error: 'No video file provided' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file type
+    if (!videoFile.type.startsWith('video/')) {
+      return NextResponse.json(
+        { error: 'File must be a video' },
+        { status: 400 }
+      );
+    }
+
+    // Validate file size (max 50MB)
+    const MAX_SIZE = 50 * 1024 * 1024; // 50MB in bytes
+    if (videoFile.size > MAX_SIZE) {
+      return NextResponse.json(
+        { error: 'Video file too large. Maximum size is 50MB' },
+        { status: 400 }
+      );
+    }
+
+    // Get browser token and IP for rate limiting
     const browserToken = await getBrowserToken();
     const ipAddress = getClientIP(request);
 
@@ -84,41 +118,8 @@ export async function POST(
       );
     }
 
-    // Parse form data
-    const formData = await request.formData();
-    const videoFile = formData.get('video') as File | null;
-    const latitude = formData.get('latitude')
-      ? parseFloat(formData.get('latitude') as string)
-      : null;
-    const longitude = formData.get('longitude')
-      ? parseFloat(formData.get('longitude') as string)
-      : null;
-
-    if (!videoFile) {
-      return NextResponse.json(
-        { error: 'No video file provided' },
-        { status: 400 }
-      );
-    }
-
-    // Validate file type
-    if (!videoFile.type.startsWith('video/')) {
-      return NextResponse.json(
-        { error: 'File must be a video' },
-        { status: 400 }
-      );
-    }
-
-    // Validate file size (max 50MB)
-    const MAX_SIZE = 50 * 1024 * 1024; // 50MB in bytes
-    if (videoFile.size > MAX_SIZE) {
-      return NextResponse.json(
-        { error: 'Video file too large. Maximum size is 50MB' },
-        { status: 400 }
-      );
-    }
-
-    // GPS verification (optional but encouraged)
+    // GPS verification (optional - doesn't block, just flags as verified/unverified)
+    let isGpsVerified = false;
     if (latitude !== null && longitude !== null) {
       const distance = calculateDistance(
         venue.latitude,
@@ -126,17 +127,9 @@ export async function POST(
         latitude,
         longitude
       );
-
-      // If user is more than 500m away, reject
-      if (distance > 500) {
-        return NextResponse.json(
-          {
-            error: 'You must be within 500 meters of the venue to upload a video',
-            distance: Math.round(distance),
-          },
-          { status: 403 }
-        );
-      }
+      // Mark as verified only if within 500m
+      isGpsVerified = distance <= 500;
+      console.log(`[Video Upload] GPS check for ${venue.name}: distance=${Math.round(distance)}m, verified=${isGpsVerified}`);
     }
 
     // Convert video to base64 for MVP (not ideal for production)
@@ -165,7 +158,10 @@ export async function POST(
         success: true,
         videoId: video.id,
         expiresAt: video.expiresAt.toISOString(),
-        message: 'Video uploaded successfully',
+        gpsVerified: isGpsVerified,
+        message: isGpsVerified
+          ? 'Video uploaded successfully (GPS verified)'
+          : 'Video uploaded successfully (unverified location)',
       },
       { status: 201 }
     );
