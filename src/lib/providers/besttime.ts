@@ -182,16 +182,24 @@ export class BestTimeProvider implements BusynessProvider {
         return null;
       }
 
-      const level = data.analysis.venue_live_busyness;
-      if (level === undefined || level === null || isNaN(level)) {
-        console.log(`Invalid live level for ${venueName}: ${level}`);
+      const relativeLevel = data.analysis.venue_live_busyness;
+      if (relativeLevel === undefined || relativeLevel === null || isNaN(relativeLevel)) {
+        console.log(`Invalid live level for ${venueName}: ${relativeLevel}`);
         return null;
       }
 
-      console.log(`BestTime LIVE: ${venueName} - Level ${level}`);
+      // BestTime live busyness is RELATIVE to average: -100 to +100
+      // We need to convert to absolute 0-100 scale:
+      // -100 (very quiet) -> 0
+      // 0 (average) -> 50
+      // +100 (very busy) -> 100
+      const clampedRelative = Math.max(-100, Math.min(100, relativeLevel));
+      const absoluteLevel = 50 + (clampedRelative / 2);
+
+      console.log(`BestTime LIVE: ${venueName} - Relative ${relativeLevel}% -> Absolute ${Math.round(absoluteLevel)}%`);
 
       return {
-        level: Math.round(level),
+        level: Math.round(absoluteLevel),
         timestamp: new Date(),
         source: `${this.name} (Live)`,
       };
