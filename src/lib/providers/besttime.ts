@@ -147,21 +147,21 @@ export class BestTimeProvider implements BusynessProvider {
 
   /**
    * Get live busyness data using venue ID
-   * API: GET /forecast/live with query params
+   * API: POST /forecasts/live with query params
    */
   private async getLiveData(venueName: string, venueId: string): Promise<BusynessReading | null> {
     try {
       await this.rateLimit();
 
-      // Try GET with query params
+      // POST to /forecasts/live endpoint
       const params = new URLSearchParams({
         api_key_private: this.apiKey,
         venue_id: venueId,
       });
-      const url = `${this.baseUrl}/forecast/live?${params.toString()}`;
+      const url = `${this.baseUrl}/forecasts/live?${params.toString()}`;
 
       const response = await fetch(url, {
-        method: 'GET',
+        method: 'POST',
       });
 
       if (!response.ok) {
