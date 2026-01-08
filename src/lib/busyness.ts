@@ -1,11 +1,16 @@
 import { prisma } from './prisma';
-import { BusynessSource, CrowdLevel } from '@prisma/client';
+import { BusynessSource, CrowdLevel, VenueType } from '@prisma/client';
+import { getExpectedBusyness, validateLiveReading } from './providers/google-utils';
 
 export interface FusedBusyness {
   level: number; // 0-100
   confidence: number; // 0-1
   trend: 'up' | 'down' | 'stable';
   lastUpdated: Date;
+  sanityCheck?: {
+    isReasonable: boolean;
+    reason: string;
+  };
 }
 
 interface BusynessObservation {
@@ -113,13 +118,23 @@ function calculateTrend(
 }
 
 /**
+ * Source weights - crowd reports are weighted higher as they're from real users on-site
+ */
+const SOURCE_WEIGHTS: Record<string, number> = {
+  crowd: 2.0,    // Crowd reports from users on-site - highest trust
+  provider: 1.0, // Provider data (BestTime) - base weight, subject to sanity check
+};
+
+/**
  * Fuse busyness data from provider and crowd sources
- * Uses the most recent observation as the primary source
- * with confidence based on data freshness
+ * - Crowd reports are weighted higher than provider data
+ * - Provider data is sanity-checked against expected historical patterns
+ * - Falls back to expected busyness when no live data available
  */
 export async function fuseBusynessData(
   venueId: string,
-  currentTime: Date = new Date()
+  currentTime: Date = new Date(),
+  venueType?: VenueType
 ): Promise<FusedBusyness> {
   // Fetch observations from last 2 hours
   const twoHoursAgo = new Date(currentTime.getTime() - 2 * 60 * 60 * 1000);
@@ -136,46 +151,106 @@ export async function fuseBusynessData(
     },
   });
 
-  // No data available
+  // Get venue type if not provided (needed for Google sanity check)
+  let effectiveVenueType = venueType;
+  if (!effectiveVenueType) {
+    const venue = await prisma.venue.findUnique({
+      where: { id: venueId },
+      select: { type: true },
+    });
+    effectiveVenueType = venue?.type || 'bar';
+  }
+
+  // No data available - use Google expected busyness as fallback
   if (observations.length === 0) {
+    const expected = getExpectedBusyness(effectiveVenueType, currentTime);
     return {
-      level: 50,
-      confidence: 0,
+      level: expected.expectedLevel,
+      confidence: expected.confidence * 0.3, // Low confidence since it's just historical
       trend: 'stable',
       lastUpdated: currentTime,
+      sanityCheck: {
+        isReasonable: true,
+        reason: `No live data - using historical estimate: ${expected.description}`,
+      },
     };
   }
 
-  // Use the most recent observation directly
-  const mostRecentObs = observations[0];
-
-  // Check if venue is closed
-  if (mostRecentObs.level === -1) {
+  // Check if venue is closed (level === -1)
+  const closedObs = observations.find(o => o.level === -1);
+  if (closedObs) {
     return {
       level: -1,
       confidence: 1,
       trend: 'stable',
-      lastUpdated: mostRecentObs.timestamp,
+      lastUpdated: closedObs.timestamp,
     };
   }
 
-  // Calculate confidence based on recency
-  const ageInMinutes = (currentTime.getTime() - mostRecentObs.timestamp.getTime()) / (1000 * 60);
-  const recencyConfidence = Math.max(0, 1 - ageInMinutes / 60); // Decays over 1 hour
+  // Separate crowd and provider observations
+  const crowdObs = observations.filter((o: BusynessObservation) => o.source === 'crowd');
+  const providerObs = observations.filter((o: BusynessObservation) => o.source === 'provider');
+
+  // Calculate weighted average with time decay
+  let weightedSum = 0;
+  let totalWeight = 0;
+  let mostRecentTimestamp = observations[0].timestamp;
+
+  for (const obs of observations) {
+    const ageInMinutes = (currentTime.getTime() - obs.timestamp.getTime()) / (1000 * 60);
+    const recencyWeight = calculateRecencyWeight(ageInMinutes);
+    const sourceWeight = SOURCE_WEIGHTS[obs.source] || 1.0;
+
+    // Apply sanity check penalty to provider data
+    let sanityMultiplier = 1.0;
+    if (obs.source === 'provider') {
+      const validation = validateLiveReading(obs.level, effectiveVenueType, currentTime);
+      sanityMultiplier = validation.confidenceMultiplier;
+    }
+
+    const finalWeight = recencyWeight * sourceWeight * sanityMultiplier;
+    weightedSum += obs.level * finalWeight;
+    totalWeight += finalWeight;
+
+    if (obs.timestamp > mostRecentTimestamp) {
+      mostRecentTimestamp = obs.timestamp;
+    }
+  }
+
+  // Calculate final level
+  const fusedLevel = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 50;
+
+  // Calculate confidence based on recency and data quality
+  const mostRecentAge = (currentTime.getTime() - mostRecentTimestamp.getTime()) / (1000 * 60);
+  const recencyConfidence = Math.max(0, 1 - mostRecentAge / 60);
+
+  // Boost confidence if we have crowd reports (more trustworthy)
+  const crowdBoost = crowdObs.length > 0 ? 1.2 : 1.0;
+
+  // Final confidence capped at 1.0
+  const finalConfidence = Math.min(1, recencyConfidence * crowdBoost);
 
   // Calculate trend from historical data
   const trend = calculateTrend(observations, currentTime);
 
+  // Do a final sanity check on the fused result
+  const finalValidation = validateLiveReading(fusedLevel, effectiveVenueType, currentTime);
+
   return {
-    level: Math.max(0, Math.min(100, mostRecentObs.level)),
-    confidence: Math.round(recencyConfidence * 100) / 100,
+    level: Math.max(0, Math.min(100, fusedLevel)),
+    confidence: Math.round(finalConfidence * 100) / 100,
     trend,
-    lastUpdated: mostRecentObs.timestamp,
+    lastUpdated: mostRecentTimestamp,
+    sanityCheck: {
+      isReasonable: finalValidation.isReasonable,
+      reason: finalValidation.reason,
+    },
   };
 }
 
 /**
  * Get fused busyness for multiple venues efficiently
+ * Uses same weighted fusion algorithm as single-venue version
  */
 export async function fuseBusynessDataBulk(
   venueIds: string[],
@@ -198,6 +273,13 @@ export async function fuseBusynessDataBulk(
     },
   });
 
+  // Fetch venue types for sanity checks
+  const venues = await prisma.venue.findMany({
+    where: { id: { in: venueIds } },
+    select: { id: true, type: true },
+  });
+  const venueTypeMap = new Map(venues.map((v: { id: string; type: VenueType }) => [v.id, v.type]));
+
   // Group by venue
   const observationsByVenue = new Map<string, BusynessObservation[]>();
   for (const obs of observations) {
@@ -212,43 +294,91 @@ export async function fuseBusynessDataBulk(
 
   for (const venueId of venueIds) {
     const venueObs = observationsByVenue.get(venueId) || [];
+    const venueType = venueTypeMap.get(venueId) || 'bar';
 
+    // No data - use Google expected busyness as fallback
     if (venueObs.length === 0) {
+      const expected = getExpectedBusyness(venueType, currentTime);
       results.set(venueId, {
-        level: 50,
-        confidence: 0,
+        level: expected.expectedLevel,
+        confidence: expected.confidence * 0.3, // Low confidence for historical estimate
         trend: 'stable',
         lastUpdated: currentTime,
+        sanityCheck: {
+          isReasonable: true,
+          reason: `No live data - using historical estimate: ${expected.description}`,
+        },
       });
       continue;
     }
 
-    // Use the most recent observation directly
-    const mostRecentObs = venueObs[0]; // Already sorted by timestamp desc
-
     // Check if venue is closed
-    if (mostRecentObs.level === -1) {
+    const closedObs = venueObs.find(o => o.level === -1);
+    if (closedObs) {
       results.set(venueId, {
         level: -1,
         confidence: 1,
         trend: 'stable',
-        lastUpdated: mostRecentObs.timestamp,
+        lastUpdated: closedObs.timestamp,
       });
       continue;
     }
 
-    // Calculate confidence based on recency
-    const ageInMinutes = (currentTime.getTime() - mostRecentObs.timestamp.getTime()) / (1000 * 60);
-    const recencyConfidence = Math.max(0, 1 - ageInMinutes / 60); // Decays over 1 hour
+    // Separate crowd and provider observations
+    const crowdObs = venueObs.filter((o: BusynessObservation) => o.source === 'crowd');
+
+    // Calculate weighted average with time decay and source weights
+    let weightedSum = 0;
+    let totalWeight = 0;
+    let mostRecentTimestamp = venueObs[0].timestamp;
+
+    for (const obs of venueObs) {
+      const ageInMinutes = (currentTime.getTime() - obs.timestamp.getTime()) / (1000 * 60);
+      const recencyWeight = calculateRecencyWeight(ageInMinutes);
+      const sourceWeight = SOURCE_WEIGHTS[obs.source] || 1.0;
+
+      // Apply sanity check penalty to provider data
+      let sanityMultiplier = 1.0;
+      if (obs.source === 'provider') {
+        const validation = validateLiveReading(obs.level, venueType, currentTime);
+        sanityMultiplier = validation.confidenceMultiplier;
+      }
+
+      const finalWeight = recencyWeight * sourceWeight * sanityMultiplier;
+      weightedSum += obs.level * finalWeight;
+      totalWeight += finalWeight;
+
+      if (obs.timestamp > mostRecentTimestamp) {
+        mostRecentTimestamp = obs.timestamp;
+      }
+    }
+
+    // Calculate final level
+    const fusedLevel = totalWeight > 0 ? Math.round(weightedSum / totalWeight) : 50;
+
+    // Calculate confidence based on recency and data quality
+    const mostRecentAge = (currentTime.getTime() - mostRecentTimestamp.getTime()) / (1000 * 60);
+    const recencyConfidence = Math.max(0, 1 - mostRecentAge / 60);
+
+    // Boost confidence if we have crowd reports
+    const crowdBoost = crowdObs.length > 0 ? 1.2 : 1.0;
+    const finalConfidence = Math.min(1, recencyConfidence * crowdBoost);
 
     // Calculate trend from historical data
     const trend = calculateTrend(venueObs, currentTime);
 
+    // Final sanity check
+    const finalValidation = validateLiveReading(fusedLevel, venueType, currentTime);
+
     results.set(venueId, {
-      level: Math.max(0, Math.min(100, mostRecentObs.level)),
-      confidence: Math.round(recencyConfidence * 100) / 100,
+      level: Math.max(0, Math.min(100, fusedLevel)),
+      confidence: Math.round(finalConfidence * 100) / 100,
       trend,
-      lastUpdated: mostRecentObs.timestamp,
+      lastUpdated: mostRecentTimestamp,
+      sanityCheck: {
+        isReasonable: finalValidation.isReasonable,
+        reason: finalValidation.reason,
+      },
     });
   }
 

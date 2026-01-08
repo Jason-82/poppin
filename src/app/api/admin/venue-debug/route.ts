@@ -1,6 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { VenueType } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { fuseBusynessData } from '@/lib/busyness';
+import { getExpectedBusyness, validateLiveReading } from '@/lib/providers/google-utils';
+
+interface VenueWithType {
+  id: string;
+  name: string;
+  address: string;
+  neighborhood: string | null;
+  latitude: number;
+  longitude: number;
+  type: VenueType;
+  googlePlaceId: string | null;
+  description: string | null;
+  phoneNumber: string | null;
+  website: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface BusynessObs {
+  id: string;
+  source: string;
+  level: number;
+  timestamp: Date;
+}
 
 /**
  * GET /api/admin/venue-debug?name=<venue_name>
@@ -17,7 +42,7 @@ export async function GET(request: NextRequest) {
       select: { id: true, name: true },
     });
 
-    const venuesWithBatch = venues.map((v, index) => ({
+    const venuesWithBatch = venues.map((v: { id: string; name: string }, index: number) => ({
       position: index,
       batch: (index % 8) + 1,
       name: v.name,
@@ -52,8 +77,8 @@ export async function GET(request: NextRequest) {
   });
 
   const results = await Promise.all(
-    venues.map(async (venue) => {
-      const position = allVenues.findIndex((v) => v.id === venue.id);
+    venues.map(async (venue: VenueWithType) => {
+      const position = allVenues.findIndex((v: { id: string; name: string }) => v.id === venue.id);
       const batch = (position % 8) + 1;
 
       // Get recent observations
@@ -67,23 +92,40 @@ export async function GET(request: NextRequest) {
         take: 10,
       });
 
-      // Get fused busyness
-      const busyness = await fuseBusynessData(venue.id);
+      // Get fused busyness (now includes sanity check)
+      const busyness = await fuseBusynessData(venue.id, new Date(), venue.type);
+
+      // Get expected busyness for comparison
+      const expected = getExpectedBusyness(venue.type);
 
       return {
         venue: {
           id: venue.id,
           name: venue.name,
+          type: venue.type,
           position,
           batch,
         },
         busyness,
-        recentObservations: observations.map((o) => ({
-          source: o.source,
-          level: o.level,
-          timestamp: o.timestamp.toISOString(),
-          ageMinutes: Math.round((Date.now() - o.timestamp.getTime()) / 60000),
-        })),
+        expected: {
+          level: expected.expectedLevel,
+          confidence: expected.confidence,
+          description: expected.description,
+        },
+        recentObservations: observations.map((o: BusynessObs) => {
+          const validation = validateLiveReading(o.level, venue.type);
+          return {
+            source: o.source,
+            level: o.level,
+            timestamp: o.timestamp.toISOString(),
+            ageMinutes: Math.round((Date.now() - o.timestamp.getTime()) / 60000),
+            sanityCheck: {
+              isReasonable: validation.isReasonable,
+              confidenceMultiplier: validation.confidenceMultiplier,
+              reason: validation.reason,
+            },
+          };
+        }),
       };
     })
   );
