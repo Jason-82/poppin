@@ -8,6 +8,7 @@
 import { BusynessProvider } from './types';
 import { MockProvider } from './mock';
 import { BestTimeProvider } from './besttime';
+import { GooglePlacesProvider } from './google-places';
 
 /**
  * Get the active busyness provider based on environment configuration
@@ -15,7 +16,7 @@ import { BestTimeProvider } from './besttime';
  * To switch providers, set BUSYNESS_PROVIDER environment variable:
  * - "mock" (default): Use MockProvider for testing
  * - "besttime": Use BestTime API
- * - "google": Use Google Places API (implementation needed)
+ * - "google": Use Google Places API for open/closed + time-based estimates
  */
 export function getProvider(): BusynessProvider {
   const providerName = process.env.BUSYNESS_PROVIDER || 'mock';
@@ -36,9 +37,17 @@ export function getProvider(): BusynessProvider {
       return provider;
     }
 
-    // Future providers can be added here:
-    // case 'google':
-    //   return new GooglePlacesProvider();
+    case 'google': {
+      const provider = new GooglePlacesProvider();
+      // Fall back to mock if API key is not configured
+      if (!process.env.GOOGLE_PLACES_API_KEY) {
+        console.warn(
+          'GOOGLE_PLACES_API_KEY not configured, falling back to MockProvider'
+        );
+        return new MockProvider();
+      }
+      return provider;
+    }
 
     default:
       console.warn(
@@ -54,3 +63,4 @@ export function getProvider(): BusynessProvider {
 export type { BusynessProvider, BusynessReading, BusynessForecast } from './types';
 export { MockProvider } from './mock';
 export { BestTimeProvider } from './besttime';
+export { GooglePlacesProvider } from './google-places';
