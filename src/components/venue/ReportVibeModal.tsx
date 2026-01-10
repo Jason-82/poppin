@@ -32,6 +32,14 @@ const TAG_OPTIONS = [
   'loud',
 ];
 
+const WAIT_OPTIONS = [
+  { value: 0, label: 'No wait' },
+  { value: 5, label: '~5 min' },
+  { value: 15, label: '~15 min' },
+  { value: 30, label: '~30 min' },
+  { value: 60, label: '1 hour+' },
+];
+
 export default function ReportVibeModal({
   venueId,
   venueName,
@@ -42,6 +50,9 @@ export default function ReportVibeModal({
   const { data: session } = useSession();
   const [selectedLevel, setSelectedLevel] = useState<'dead' | 'warm' | 'busy' | 'packed' | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [coverCharge, setCoverCharge] = useState<number | null>(null);
+  const [hasCover, setHasCover] = useState<boolean | null>(null);
+  const [waitMinutes, setWaitMinutes] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<PointsResponse | null>(null);
@@ -52,6 +63,9 @@ export default function ReportVibeModal({
     setSuccessData(null);
     setSelectedLevel(null);
     setSelectedTags([]);
+    setCoverCharge(null);
+    setHasCover(null);
+    setWaitMinutes(null);
     setError(null);
     onClose();
   };
@@ -66,7 +80,12 @@ export default function ReportVibeModal({
     setError(null);
 
     try {
-      const result = await submitReport(venueId, selectedLevel, selectedTags);
+      const result = await submitReport(venueId, {
+        level: selectedLevel,
+        tags: selectedTags,
+        coverCharge: hasCover === false ? 0 : coverCharge,
+        waitMinutes,
+      });
       onSuccess?.();
 
       // If user earned points, show success screen
@@ -181,6 +200,73 @@ export default function ReportVibeModal({
                 `}
               >
                 {tag.replace(/_/g, ' ')}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Cover Charge */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-zinc-300 mb-3">Cover charge? (optional)</h3>
+          <div className="flex gap-2 mb-2">
+            <button
+              onClick={() => { setHasCover(false); setCoverCharge(null); }}
+              className={`
+                flex-1 py-2 px-3 rounded-lg text-sm transition-colors
+                ${hasCover === false
+                  ? 'bg-green-600 text-white'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                }
+              `}
+            >
+              No cover
+            </button>
+            <button
+              onClick={() => setHasCover(true)}
+              className={`
+                flex-1 py-2 px-3 rounded-lg text-sm transition-colors
+                ${hasCover === true
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                }
+              `}
+            >
+              Yes, there&apos;s a cover
+            </button>
+          </div>
+          {hasCover && (
+            <div className="flex items-center gap-2">
+              <span className="text-zinc-400">$</span>
+              <input
+                type="number"
+                min="1"
+                max="200"
+                value={coverCharge || ''}
+                onChange={(e) => setCoverCharge(e.target.value ? parseInt(e.target.value, 10) : null)}
+                placeholder="Amount"
+                className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Wait Time */}
+        <div className="mb-6">
+          <h3 className="text-sm font-medium text-zinc-300 mb-3">Line wait time? (optional)</h3>
+          <div className="flex flex-wrap gap-2">
+            {WAIT_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                onClick={() => setWaitMinutes(option.value)}
+                className={`
+                  px-3 py-1.5 rounded-lg text-sm transition-colors
+                  ${waitMinutes === option.value
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                  }
+                `}
+              >
+                {option.label}
               </button>
             ))}
           </div>

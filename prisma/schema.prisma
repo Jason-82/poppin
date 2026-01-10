@@ -64,6 +64,8 @@ model CrowdReport {
   venue         Venue           @relation(fields: [venueId], references: [id], onDelete: Cascade)
   level         CrowdLevel
   tags          String[]        // Array of tags like "good_music", "long_wait", "great_crowd"
+  coverCharge   Int?            // Cover charge in dollars (null = didn't report, 0 = no cover)
+  waitMinutes   Int?            // Wait time in minutes to get in (null = no wait/didn't report)
   browserToken  String          // Fingerprint/session identifier
   ipAddress     String
   userAgent     String?
@@ -105,23 +107,33 @@ model VenueVideo {
 
 // Recurring events at venues (e.g., Latin dance nights at bars)
 model RecurringEvent {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   venueId       String
-  venue         Venue       @relation(fields: [venueId], references: [id], onDelete: Cascade)
-  name          String      // e.g., "Baila Tuesdays", "Tropical Wednesdays"
-  eventType     EventType   // Type of event
-  dayOfWeek     Int         // 0=Sunday, 1=Monday, ..., 6=Saturday
-  startTime     String      // e.g., "20:00" (8 PM)
-  endTime       String      // e.g., "02:00" (2 AM)
-  description   String?     // Event details
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  venue         Venue        @relation(fields: [venueId], references: [id], onDelete: Cascade)
+  name          String       // e.g., "Baila Tuesdays", "Tropical Wednesdays"
+  eventType     EventType    // Type of event
+  dayOfWeek     Int          // 0=Sunday, 1=Monday, ..., 6=Saturday
+  startTime     String       // e.g., "20:00" (8 PM)
+  endTime       String       // e.g., "02:00" (2 AM)
+  description   String?      // Event details
+  coverCharge   Int?         // Cover charge in dollars (null = unknown/free)
+  source        EventSource  @default(manual)  // Where this data came from
+  sourceUrl     String?      // URL where we found this info
+  verified      Boolean      @default(false)   // Has a venue owner confirmed this?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@index([venueId])
   @@index([dayOfWeek])
   @@index([eventType])
   @@unique([venueId, dayOfWeek, eventType])  // One event type per day per venue
+}
+
+enum EventSource {
+  manual    // Manually entered by admin
+  scraped   // Scraped from Do312, etc.
+  venue     // Submitted by venue owner
 }
 
 enum EventType {
@@ -131,6 +143,13 @@ enum EventType {
   dj_night
   karaoke
   trivia
+  happy_hour
+  ladies_night
+  industry_night
+  drag_show
+  comedy
+  open_mic
+  sports
   other
 }
 

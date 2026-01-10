@@ -107,15 +107,32 @@ export interface PointsResponse {
 }
 
 // Submit crowd report
+export interface ReportOptions {
+  level: 'dead' | 'warm' | 'busy' | 'packed';
+  tags?: string[];
+  coverCharge?: number | null;
+  waitMinutes?: number | null;
+}
+
 export async function submitReport(
   venueId: string,
-  level: 'dead' | 'warm' | 'busy' | 'packed',
+  levelOrOptions: 'dead' | 'warm' | 'busy' | 'packed' | ReportOptions,
   tags?: string[]
 ): Promise<{ success: boolean; reportId: string; message: string; points?: PointsResponse }> {
+  // Support both old signature (level, tags) and new signature (options object)
+  const body = typeof levelOrOptions === 'string'
+    ? { level: levelOrOptions, tags }
+    : {
+        level: levelOrOptions.level,
+        tags: levelOrOptions.tags,
+        coverCharge: levelOrOptions.coverCharge,
+        waitMinutes: levelOrOptions.waitMinutes,
+      };
+
   const response = await fetch(`/api/venues/${venueId}/report`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ level, tags }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {

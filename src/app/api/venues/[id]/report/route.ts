@@ -48,7 +48,7 @@ export async function POST(
 
     // Parse request body
     const body = await request.json();
-    const { level, tags } = body;
+    const { level, tags, coverCharge, waitMinutes } = body;
 
     // Validate level
     if (!level || !VALID_CROWD_LEVELS.includes(level)) {
@@ -78,6 +78,24 @@ export async function POST(
 
       // Limit to max 5 tags
       validatedTags = validatedTags.slice(0, 5);
+    }
+
+    // Validate coverCharge (optional, must be number >= 0)
+    let validatedCoverCharge: number | null = null;
+    if (coverCharge !== undefined && coverCharge !== null) {
+      const parsed = parseInt(coverCharge, 10);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 200) {
+        validatedCoverCharge = parsed;
+      }
+    }
+
+    // Validate waitMinutes (optional, must be number >= 0)
+    let validatedWaitMinutes: number | null = null;
+    if (waitMinutes !== undefined && waitMinutes !== null) {
+      const parsed = parseInt(waitMinutes, 10);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 180) {
+        validatedWaitMinutes = parsed;
+      }
     }
 
     // Get client IP and browser token
@@ -116,6 +134,8 @@ export async function POST(
         venueId,
         level: level as CrowdLevel,
         tags: validatedTags,
+        coverCharge: validatedCoverCharge,
+        waitMinutes: validatedWaitMinutes,
         browserToken,
         ipAddress: hashedIP, // Store hashed IP, not plain text
         userAgent,
