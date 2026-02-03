@@ -8,11 +8,12 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow certain endpoints without cookie authentication
-  // These routes have their own authentication via CRON_SECRET
+  // These routes have their own authentication via CRON_SECRET or external webhooks
   if (
     pathname === '/api/auth/verify' ||
     pathname.startsWith('/api/admin/') ||
-    pathname.startsWith('/api/cron/')
+    pathname.startsWith('/api/cron/') ||
+    pathname === '/api/pia/instagram-webhook'  // Meta webhook needs public access
   ) {
     return NextResponse.next();
   }
