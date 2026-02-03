@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Send a message back to Instagram user
+ * Send a message back to Instagram user via Instagram Graph API
  */
 async function sendInstagramMessage(recipientId: string, message: string): Promise<boolean> {
   if (!PAGE_ACCESS_TOKEN) {
@@ -117,18 +117,44 @@ async function sendInstagramMessage(recipientId: string, message: string): Promi
     return false;
   }
 
+  // Use Instagram Graph API endpoint for Instagram DMs
+  const INSTAGRAM_ACCOUNT_ID = process.env.INSTAGRAM_ACCOUNT_ID;
+
   try {
-    const response = await fetch(
-      `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+    // Try Instagram Graph API endpoint first
+    let response = await fetch(
+      `https://graph.instagram.com/v21.0/me/messages`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${PAGE_ACCESS_TOKEN}`
+        },
         body: JSON.stringify({
           recipient: { id: recipientId },
           message: { text: message },
         }),
       }
     );
+
+    // If that fails, try with the Instagram Account ID
+    if (!response.ok && INSTAGRAM_ACCOUNT_ID) {
+      console.log('Trying with Instagram Account ID...');
+      response = await fetch(
+        `https://graph.instagram.com/v21.0/${INSTAGRAM_ACCOUNT_ID}/messages`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${PAGE_ACCESS_TOKEN}`
+          },
+          body: JSON.stringify({
+            recipient: { id: recipientId },
+            message: { text: message },
+          }),
+        }
+      );
+    }
 
     if (!response.ok) {
       const error = await response.text();
