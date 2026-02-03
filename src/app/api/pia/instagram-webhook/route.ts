@@ -44,18 +44,22 @@ interface WebhookBody {
  * GET - Webhook verification (required by Meta)
  */
 export async function GET(request: NextRequest) {
+  console.log('Instagram webhook GET received');
   const searchParams = request.nextUrl.searchParams;
 
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
   const challenge = searchParams.get('hub.challenge');
 
+  console.log('Verification attempt:', { mode, tokenMatch: token === VERIFY_TOKEN, hasChallenge: !!challenge });
+
   // Verify the webhook
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-    console.log('Instagram webhook verified');
+    console.log('Instagram webhook verified successfully');
     return new NextResponse(challenge, { status: 200 });
   }
 
+  console.log('Instagram webhook verification FAILED');
   return NextResponse.json({ error: 'Verification failed' }, { status: 403 });
 }
 
@@ -63,11 +67,16 @@ export async function GET(request: NextRequest) {
  * POST - Handle incoming messages
  */
 export async function POST(request: NextRequest) {
+  console.log('Instagram webhook POST received');
+
   try {
     const body: WebhookBody = await request.json();
+    console.log('Webhook body:', JSON.stringify(body, null, 2));
 
-    // Verify this is from Instagram
-    if (body.object !== 'instagram') {
+    // Accept both 'instagram' and 'page' object types
+    // Meta sends 'page' for some Messenger Platform webhooks
+    if (body.object !== 'instagram' && body.object !== 'page') {
+      console.log('Ignoring webhook with object type:', body.object);
       return NextResponse.json({ status: 'ignored' });
     }
 
