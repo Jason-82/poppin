@@ -109,8 +109,8 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * Send a message back to Instagram user via Facebook Graph API
- * For Instagram messaging, use: POST /{page-id}/messages
+ * Send a message back to Instagram user
+ * Tries multiple endpoint formats to find the one that works
  */
 async function sendInstagramMessage(recipientId: string, message: string): Promise<boolean> {
   if (!PAGE_ACCESS_TOKEN) {
@@ -118,37 +118,86 @@ async function sendInstagramMessage(recipientId: string, message: string): Promi
     return false;
   }
 
-  // Page ID for Poppin Chicago - required for Instagram messaging
   const PAGE_ID = process.env.META_PAGE_ID || '912069145331385';
+  const IG_ACCOUNT_ID = process.env.INSTAGRAM_ACCOUNT_ID;
 
-  console.log(`Attempting to send message to ${recipientId} via page ${PAGE_ID}`);
+  console.log('=== SEND MESSAGE DEBUG ===');
+  console.log('Recipient ID:', recipientId);
+  console.log('Page ID:', PAGE_ID);
+  console.log('Instagram Account ID:', IG_ACCOUNT_ID || 'not set');
+  console.log('Token (first 20 chars):', PAGE_ACCESS_TOKEN?.substring(0, 20) + '...');
 
+  const payload = {
+    recipient: { id: recipientId },
+    message: { text: message },
+    messaging_type: 'RESPONSE',
+  };
+
+  // Try approach 1: Instagram Business Account ID (if set)
+  if (IG_ACCOUNT_ID) {
+    console.log('Trying Instagram Account ID endpoint...');
+    try {
+      const response = await fetch(
+        `https://graph.facebook.com/v21.0/${IG_ACCOUNT_ID}/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }
+      );
+      if (response.ok) {
+        console.log(`SUCCESS via Instagram Account ID! Sent DM to ${recipientId}`);
+        return true;
+      }
+      const error = await response.text();
+      console.error('Instagram Account ID approach failed:', error);
+    } catch (e) {
+      console.error('Instagram Account ID approach error:', e);
+    }
+  }
+
+  // Try approach 2: Page ID
+  console.log('Trying Page ID endpoint...');
   try {
-    // Use Facebook Graph API with Page ID for Instagram messaging
     const response = await fetch(
       `https://graph.facebook.com/v21.0/${PAGE_ID}/messages?access_token=${PAGE_ACCESS_TOKEN}`,
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          recipient: { id: recipientId },
-          message: { text: message },
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       }
     );
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Failed to send Instagram message:', error);
-      return false;
+    if (response.ok) {
+      console.log(`SUCCESS via Page ID! Sent DM to ${recipientId}`);
+      return true;
     }
-
-    console.log(`Sent Instagram DM to ${recipientId}`);
-    return true;
-  } catch (error) {
-    console.error('Error sending Instagram message:', error);
-    return false;
+    const error = await response.text();
+    console.error('Page ID approach failed:', error);
+  } catch (e) {
+    console.error('Page ID approach error:', e);
   }
+
+  // Try approach 3: Direct recipient endpoint (some APIs use this)
+  console.log('Trying direct messages endpoint...');
+  try {
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }
+    );
+    if (response.ok) {
+      console.log(`SUCCESS via /me/messages! Sent DM to ${recipientId}`);
+      return true;
+    }
+    const error = await response.text();
+    console.error('/me/messages approach failed:', error);
+  } catch (e) {
+    console.error('/me/messages approach error:', e);
+  }
+
+  console.log('All approaches failed');
+  return false;
 }
