@@ -108,13 +108,67 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Cache for Page Access Token (exchanged from System User token)
+let cachedPageToken: string | null = null;
+let cachedPageTokenExpiry: number = 0;
+
+/**
+ * Exchange System User token for Page Access Token
+ * System User tokens can access /me/accounts to get Page tokens
+ */
+async function getPageAccessToken(): Promise<string | null> {
+  // Return cached token if still valid (cache for 1 hour)
+  if (cachedPageToken && Date.now() < cachedPageTokenExpiry) {
+    console.log('Using cached Page Access Token');
+    return cachedPageToken;
+  }
+
+  if (!PAGE_ACCESS_TOKEN) {
+    console.error('META_PAGE_ACCESS_TOKEN not configured');
+    return null;
+  }
+
+  const PAGE_ID = process.env.META_PAGE_ID || '912069145331385';
+
+  console.log('Exchanging System User token for Page Access Token...');
+
+  try {
+    // Get Page Access Token from System User token
+    const response = await fetch(
+      `https://graph.facebook.com/v21.0/${PAGE_ID}?fields=access_token&access_token=${PAGE_ACCESS_TOKEN}`
+    );
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.access_token) {
+        console.log('Successfully got Page Access Token');
+        cachedPageToken = data.access_token;
+        cachedPageTokenExpiry = Date.now() + 3600000; // 1 hour
+        return cachedPageToken;
+      }
+    }
+
+    const error = await response.text();
+    console.error('Failed to get Page Access Token:', error);
+
+    // Fallback: try using the original token (in case it's already a Page token)
+    console.log('Falling back to original token');
+    return PAGE_ACCESS_TOKEN;
+  } catch (e) {
+    console.error('Error exchanging token:', e);
+    return PAGE_ACCESS_TOKEN;
+  }
+}
+
 /**
  * Send a message back to Instagram user
  * Tries multiple endpoint formats to find the one that works
  */
 async function sendInstagramMessage(recipientId: string, message: string): Promise<boolean> {
-  if (!PAGE_ACCESS_TOKEN) {
-    console.error('META_PAGE_ACCESS_TOKEN not configured');
+  const pageToken = await getPageAccessToken();
+
+  if (!pageToken) {
+    console.error('No access token available');
     return false;
   }
 
@@ -125,7 +179,7 @@ async function sendInstagramMessage(recipientId: string, message: string): Promi
   console.log('Recipient ID:', recipientId);
   console.log('Page ID:', PAGE_ID);
   console.log('Instagram Account ID:', IG_ACCOUNT_ID || 'not set');
-  console.log('Token (first 20 chars):', PAGE_ACCESS_TOKEN?.substring(0, 20) + '...');
+  console.log('Using Page Token (first 20 chars):', pageToken?.substring(0, 20) + '...');
 
   const payload = {
     recipient: { id: recipientId },
@@ -138,7 +192,7 @@ async function sendInstagramMessage(recipientId: string, message: string): Promi
     console.log('Trying Instagram Account ID endpoint...');
     try {
       const response = await fetch(
-        `https://graph.facebook.com/v21.0/${IG_ACCOUNT_ID}/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+        `https://graph.facebook.com/v21.0/${IG_ACCOUNT_ID}/messages?access_token=${pageToken}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -160,7 +214,7 @@ async function sendInstagramMessage(recipientId: string, message: string): Promi
   console.log('Trying Page ID endpoint...');
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v21.0/${PAGE_ID}/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      `https://graph.facebook.com/v21.0/${PAGE_ID}/messages?access_token=${pageToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -181,7 +235,7 @@ async function sendInstagramMessage(recipientId: string, message: string): Promi
   console.log('Trying direct messages endpoint...');
   try {
     const response = await fetch(
-      `https://graph.facebook.com/v21.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`,
+      `https://graph.facebook.com/v21.0/me/messages?access_token=${pageToken}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
